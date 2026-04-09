@@ -31,6 +31,14 @@ It supports:
 
 ![Management panel](Documentation/assets/management-panel.png)
 
+### Question Editor
+
+![Question editor](Documentation/assets/management-question-editor.png)
+
+### Quiz Creator
+
+![Quiz creator](Documentation/assets/management-quiz-creator.png)
+
 ## Features
 
 - Serve the landing page from `/` and public utility pages from `wwwroot`
