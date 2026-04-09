@@ -66,6 +66,222 @@ It supports:
 - Swagger / OpenAPI
 - Static HTML, CSS, and JavaScript under `wwwroot`
 
+## System Requirements
+
+### Minimum Hardware
+
+These are practical minimums for a small internal deployment or evaluation server:
+
+- CPU: 2 cores
+- Memory: 8 GB RAM
+- Drive: 80 GB SSD
+- Network: 1 Gbps LAN or standard business internet connectivity
+
+Recommended for a more comfortable production footprint:
+
+- CPU: 4 cores or better
+- Memory: 16 GB RAM
+- Drive: 150 GB+ SSD with room for database growth, uploads, logs, and backups
+
+### Operating System
+
+Supported and recommended host environment:
+
+- Windows Server 2022 or newer
+
+Also workable for development or small internal evaluation:
+
+- Windows 11 Pro
+
+### Database
+
+Required:
+
+- Microsoft SQL Server 2019 or newer
+
+Supported common choices:
+
+- SQL Server Express for development or light internal use
+- SQL Server Standard for production-style deployment
+
+### Web Server
+
+Required for IIS hosting:
+
+- IIS 10 or newer
+- ASP.NET Core Hosting Bundle for .NET 9 installed on the server
+
+### Application Runtime
+
+Required:
+
+- .NET 9 runtime
+
+Development machine requirement:
+
+- .NET 9 SDK
+
+## Installation Prerequisites
+
+Before bringing the application online, the target server should have:
+
+- Windows fully patched
+- IIS installed
+- ASP.NET Core Hosting Bundle installed
+- SQL Server installed and reachable
+- a SQL login strategy decided:
+  - Windows integrated auth, or
+  - SQL authentication
+- a folder path prepared for the deployed site
+- TLS certificate ready if the site will be served over HTTPS
+- firewall rules opened for HTTP and HTTPS as needed
+
+## Application Requirements
+
+The app requires all of the following to start successfully:
+
+- a valid SQL Server connection string
+- `Jwt:Issuer`
+- `Jwt:Audience`
+- `Jwt:Key`
+
+Important:
+
+- `Jwt:Key` must be at least 32 characters long
+- the application persists Data Protection keys under `App_Data/keys`
+- uploaded files and image assets are stored under `wwwroot/uploads`
+- production deployments should preserve `App_Data` and uploads across redeployments
+
+## Bare-Bones Server Build Guide
+
+This is the shortest path to a working server for this repository.
+
+### 1. Prepare Windows
+
+Install:
+
+- Windows Server 2022
+- latest Windows updates
+
+Install IIS features:
+
+- Web Server
+- Static Content
+- Default Document
+- Request Filtering
+- ASP.NET 4.x features are not required for the app itself, but are commonly present on Windows servers
+- Management Console
+
+### 2. Install .NET Hosting Support
+
+Install on the server:
+
+- .NET 9 ASP.NET Core Hosting Bundle
+
+This is what allows IIS to host the published ASP.NET Core app.
+
+### 3. Install or Provision SQL Server
+
+Create or provide:
+
+- a SQL Server instance
+- a database for the application
+- an account with permission to read, write, and update schema when needed
+
+Current local example:
+
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=.\\SQLEXPRESS;Database=DevQuizDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True;"
+}
+```
+
+For production, replace that with the real server and database name.
+
+### 4. Clone or Copy the Repository
+
+On the server or deployment workstation:
+
+```powershell
+git clone https://github.com/AIAllTheThingz/TheCertMaster-CustomQuizs.git
+cd TheCertMaster-CustomQuizs
+```
+
+### 5. Configure Application Settings
+
+At minimum, configure:
+
+- `ConnectionStrings:DefaultConnection`
+- `Jwt:Issuer`
+- `Jwt:Audience`
+- `Jwt:Key`
+- `Cors:AllowedOrigins`
+
+Recommended production approach:
+
+- keep `appsettings.json` for shared defaults
+- use environment-specific settings or environment variables for secrets
+- do not commit production secrets into source control
+
+Example JWT block:
+
+```json
+"Jwt": {
+  "Issuer": "QuizAPI",
+  "Audience": "QuizAPIUsers",
+  "Key": "replace-with-a-real-32-plus-character-secret-key"
+}
+```
+
+Environment variable equivalents:
+
+```powershell
+$env:ConnectionStrings__DefaultConnection="Server=SERVERNAME;Database=QuizDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True;"
+$env:Jwt__Issuer="QuizAPI"
+$env:Jwt__Audience="QuizAPIUsers"
+$env:Jwt__Key="replace-with-a-real-32-plus-character-secret-key"
+```
+
+### 6. Build and Validate
+
+```powershell
+dotnet restore
+dotnet build QuizAPI.sln -c Release
+dotnet test QuizAPI.sln -c Release
+```
+
+### 7. Publish the Application
+
+```powershell
+dotnet publish QuizAPI.csproj -c Release -o .\publish
+```
+
+### 8. Create the IIS Site
+
+In IIS:
+
+- create an application pool:
+  - `No Managed Code`
+- create a site pointing to the published folder
+- bind the site to the desired hostname and port
+- assign the correct TLS certificate if using HTTPS
+
+The IIS app pool identity must be able to:
+
+- read the site folder
+- write to `App_Data`
+- write to `wwwroot/uploads`
+
+### 9. Start the Site
+
+After deployment:
+
+- browse to the site root
+- confirm `/` loads
+- confirm `/manage.html` loads
+- confirm login works
+- confirm quizzes and uploads are accessible
+
 ## Quick Start
 
 ### For Developers
@@ -100,6 +316,7 @@ The app requires:
 
 - a SQL Server connection string
 - JWT settings with a signing key of at least 32 characters
+- CORS origins outside Development for non-local hosting
 
 Common keys:
 
@@ -113,6 +330,20 @@ In the current local setup:
 
 - `appsettings.json` contains the SQL Server connection string
 - `appsettings.Development.json` contains local development JWT settings and dev-only behavior
+
+## IIS Deployment Notes
+
+- The app is designed to be served from the root of a site, for example `https://fqdn.com/`
+- Main pages are served directly from the same application:
+  - `/`
+  - `/register.html`
+  - `/user.html`
+  - `/manage.html`
+  - `/quiz.html`
+  - `/preemployment.html`
+- `App_Data/keys` stores Data Protection keys so auth behavior survives app restarts and IIS recycles
+- if you are moving environments, preserve any needed uploaded content under `wwwroot/uploads`
+- if you are using an existing database, verify schema and migration history carefully before enabling auto-migration
 
 ## Testing
 
