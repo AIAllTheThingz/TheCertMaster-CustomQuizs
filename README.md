@@ -23,18 +23,25 @@ It supports:
 
 ## Screenshots
 
-### Landing Page
+### Management Gallery
 
-![Landing page](Documentation/assets/landing-page.png)
+![Management panel 1](Documentation/assets/public-readme/ManagementPanel01.png)
 
+![Management panel 2](Documentation/assets/public-readme/ManagementPanel02.png)
 
-### Question Editor
+![Management panel 3](Documentation/assets/public-readme/ManagementPanel03.png)
 
-![Question editor](Documentation/assets/management-question-editor.png)
+![Management panel 4](Documentation/assets/public-readme/ManagementPanel04.png)
 
-### Quiz Creator
+![Management panel 5](Documentation/assets/public-readme/ManagementPanel05.png)
 
-![Quiz creator](Documentation/assets/management-quiz-creator.png)
+![Management panel 6](Documentation/assets/public-readme/ManagementPanel06.png)
+
+![Management panel 7](Documentation/assets/public-readme/ManagementPanel07.png)
+
+![Management panel 8](Documentation/assets/public-readme/ManagementPanel08.png)
+
+![Management panel 9](Documentation/assets/public-readme/ManagementPanel09.png)
 
 ## Features
 
