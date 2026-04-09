@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiz Selector</title>
+    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <style>
+        :root {
+            --bg: #f3f6f9;
+            --panel: #ffffff;
+            --ink: #17324d;
+            --muted: #5b6f83;
+            --line: #d7e0e8;
+            --primary: #8f1d2c;
+            --secondary: #0d5e8c;
+            --shadow: 0 14px 34px rgba(20, 44, 68, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 28px 18px 36px;
+            color: var(--ink);
+        }
+
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 2.2rem;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 18px;
+            margin: 14px 0;
+            box-shadow: var(--shadow);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        label {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        input[type="text"], select {
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid #cfc5b6;
+            background: white;
+            color: var(--ink);
+            min-width: 260px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: none;
+            background: var(--secondary);
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:hover {
+            filter: brightness(0.96);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .qtext {
+            font-size: 18px;
+            margin: 0 0 10px;
+        }
+
+        .progress {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .answers {
+            display: grid;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .answer {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: #fcf8f1;
+        }
+
+        .answer input {
+            margin-top: 3px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: #efe6d8;
+            border: 1px solid #e2d5c1;
+            font-size: 12px;
+        }
+
+        .imggrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin: 12px 0 0;
+        }
+
+        .imggrid img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: white;
+        }
+
+        .result {
+            font-size: 18px;
+        }
+
+        .ok {
+            color: #166534;
+        }
+
+        .bad {
+            color: #b91c1c;
+        }
+
+        .toplinks {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+            margin-bottom: 12px;
+        }
+
+        .answerMeta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 6px 0 10px;
+        }
+
+        .reviewAnswers {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .reviewAnswer {
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #f8fbfd;
+        }
+
+        .reviewAnswer.correct {
+            border-color: #8ad1a5;
+            background: #ecfdf3;
+        }
+
+        .reviewAnswer.selectedOnly {
+            border-color: #bdd2e2;
+            background: #f1f7fb;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <nav class="site-menu" aria-label="Site">
+            <a href="/">Home</a>
+            <a href="/register.html">Registration</a>
+            <a href="/user.html">User Page</a>
+            <a href="/manage.html">Management Panel</a>
+            <a href="/preemployment.html">Pre-Employment</a>
+            <a href="/api.html">API Tools</a>
+        </nav>
+        <h1>Quiz Selector</h1>
+        <div class="toplinks">
+            <a class="app-link" href="/index.html">Return to Home</a>
+        </div>
+
+        <div class="card" id="pickerCard">
+            <div class="row">
+                <div>
+                    <label for="categorySelect">Category</label><br />
+                    <select id="categorySelect"></select>
+                </div>
+
+                <div>
+                    <label for="quizSelect">Choose a quiz</label><br />
+                    <select id="quizSelect"></select>
+                </div>
+
+                <div>
+                    <label for="quizIdInput">...or paste quizId</label><br />
+                    <input id="quizIdInput" type="text" placeholder="00000000-0000-0000-0000-000000000000" />
+                </div>
+
+                <div style="margin-top: 18px;">
+                    <button id="btnLoad">Load quiz</button>
+                </div>
+            </div>
+            <div class="muted" id="status" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="card" id="quizCard" style="display:none;">
+            <div class="progress">
+                <div>
+                    <div class="muted" id="quizTitle"></div>
+                    <div class="row" style="margin-top:6px;">
+                        <span class="pill" id="qCounter">Question</span>
+                        <span class="pill" id="timerPill" style="display:none;">Timer</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <button id="btnPrev">&larr; Prev</button>
+                    <button id="btnNext">Next &rarr;</button>
+                    <button id="btnRestart" disabled>Restart</button>
+                    <button id="btnSubmit">Submit</button>
+                    <button id="btnNewQuiz" disabled>Select New Quiz</button>
+                </div>
+            </div>
+
+            <hr style="border:0;border-top:1px solid var(--line);margin:14px 0;" />
+
+            <div id="questionArea"></div>
+        </div>
+
+        <div class="card" id="resultCard" style="display:none;">
+            <div class="result" id="resultText"></div>
+            <div class="muted" id="resultDetail" style="margin-top: 8px;"></div>
+            <div style="margin-top: 12px;" id="perQuestion"></div>
+        </div>
+    </div>
+
+    <script>
+        function toCamelKey(k) {
+            if (!k || typeof k !== 'string') return k;
+            return k.length === 1 ? k.toLowerCase() : (k[0].toLowerCase() + k.slice(1));
+        }
+        function normalizeKeys(x) {
+            if (Array.isArray(x)) return x.map(normalizeKeys);
+            if (x && typeof x === 'object') {
+                const o = {};
+                for (const [k, v] of Object.entries(x)) o[toCamelKey(k)] = normalizeKeys(v);
+                return o;
+            }
+            return x;
+        }
+
+        const api = {
+            listCategories: () =>
+                fetch('/api/categories')
+                    .then(r => r.ok ? r.json() : Promise.reject(r)),
+
+            listQuizzes: (category) => {
+                const url = category && category !== 'All'
+                    ? (`/api/quiz?category=${encodeURIComponent(category)}`)
+                    : '/api/quiz';
+
+                return fetch(url)
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys);
+            },
+
+            randomized: (quizId) =>
+                fetch(`/api/quiz/${quizId}/random`)
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys),
+
+            generateSelection: (payload) =>
+                fetch('/api/quiz/generate-selection', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys),
+
+            submit: (quizId, payload) =>
+                fetch(`/api/quiz/${quizId}/submit`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys),
+
+            submitSelection: (payload) =>
+                fetch('/api/quiz/submit-selection', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys),
+
+            getCurrentProgress: () =>
+                fetch('/api/quiz/progress/current', {
+                    headers: authHeaders()
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys),
+
+            saveProgress: (payload) =>
+                fetch('/api/quiz/progress', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys),
+
+            clearProgress: (sessionKey) =>
+                fetch(`/api/quiz/progress/current?sessionKey=${encodeURIComponent(sessionKey || '')}`, {
+                    method: 'DELETE',
+                    headers: authHeaders()
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(normalizeKeys)
+        };
+
+        const el = (id) => document.getElementById(id);
+        const categorySelect = el('categorySelect');
+        const quizSelect = el('quizSelect');
+        const quizIdInput = el('quizIdInput');
+        const pickerCard = el('pickerCard');
+        const status = el('status');
+        const quizCard = el('quizCard');
+        const btnNewQuiz = el('btnNewQuiz');
+        const resultCard = el('resultCard');
+        const questionArea = el('questionArea');
+        const quizTitle = el('quizTitle');
+        const qCounter = el('qCounter');
+        const timerPill = el('timerPill');
+        const btnLoad = el('btnLoad');
+        const btnRestart = el('btnRestart');
+        const btnPrev = el('btnPrev');
+        const btnNext = el('btnNext');
+        const btnSubmit = el('btnSubmit');
+        const resultText = el('resultText');
+        const resultDetail = el('resultDetail');
+        const perQuestion = el('perQuestion');
+
+        let currentQuizId = null;
+        let quizDto = null;
+        let index = 0;
+        let launchConfig = null;
+        let timerSeconds = 0;
+        let timerHandle = null;
+        let sessionKey = '';
+        let saveHandle = null;
+        let suppressSave = false;
+        const selections = new Map();
+
+        function setStatus(msg) { status.textContent = msg; }
+
+        function getToken() {
+            return localStorage.getItem('jwtToken') || localStorage.getItem('apiJwtToken') || '';
+        }
+
+        function authHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            const token = getToken();
+            if (token) {
+                headers['Authorization'] = 'Bearer ' + token;
+            }
+            return headers;
+        }
+
+        function guidFromQuery() {
+            const p = new URLSearchParams(window.location.search);
+            return p.get('quizId');
+        }
+
+        function getLaunchConfig() {
+            try {
+                const raw = sessionStorage.getItem('quizRunnerLaunchConfig');
+                if (!raw) return null;
+                return JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        }
+
+        function clearLaunchConfig() {
+            sessionStorage.removeItem('quizRunnerLaunchConfig');
+            launchConfig = null;
+        }
+
+        function createSessionKey() {
+            if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+            return `quiz-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+
+        function normalizeQuizList(quizzes) {
+            return (quizzes || []).map(q => ({
+                id: q.Id ?? q.id,
+                title: q.Title ?? q.title,
+                createdUtc: q.CreatedUtc ?? q.createdUtc
+            }));
+        }
+
+        function normalizeQuiz(dto) {
+            if (!dto) return null;
+            const questionsRaw = dto.Questions ?? dto.questions ?? [];
+            return {
+                quizId: dto.QuizId ?? dto.quizId,
+                title: dto.Title ?? dto.title,
+                category: dto.Category ?? dto.category ?? 'Uncategorized',
+                passThresholdPercent: Number(dto.PassThresholdPercent ?? dto.passThresholdPercent ?? 70),
+                questions: questionsRaw.map(q => {
+                    const answersRaw = q.Answers ?? q.answers ?? [];
+                    const imagesRaw = q.Images ?? q.images ?? [];
+                    return {
+                        id: q.QuestionId ?? q.questionId,
+                        text: q.Text ?? q.text,
+                        allowMultiple: q.AllowMultiple ?? q.allowMultiple,
+                        difficulty: q.Difficulty ?? q.difficulty ?? 'Unspecified',
+                        tags: q.Tags ?? q.tags ?? [],
+                        answers: answersRaw.map(a => ({
+                            id: a.AnswerId ?? a.answerId,
+                            text: a.Text ?? a.text
+                        })),
+                        images: imagesRaw.map(i => ({
+                            fileName: i.FileName ?? i.fileName,
+                            url: i.Url ?? i.url
+                        }))
+                    };
+                })
+            };
+        }
+
+        function fillCategorySelect(categories) {
+            categorySelect.innerHTML = '';
+
+            const all = document.createElement('option');
+            all.value = 'All';
+            all.textContent = 'All';
+            categorySelect.appendChild(all);
+
+            for (const c of categories) {
+                if (!c || typeof c !== 'string') continue;
+                if (c.toLowerCase() === 'all') continue;
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                categorySelect.appendChild(opt);
+            }
+        }
+
+        function fillQuizSelect(quizzes) {
+            quizSelect.innerHTML = '';
+            const opt0 = document.createElement('option');
+            opt0.value = '';
+            opt0.textContent = '— select —';
+            quizSelect.appendChild(opt0);
+
+            for (const q of quizzes) {
+                const opt = document.createElement('option');
+                opt.value = q.id;
+                opt.textContent = q.title;
+                quizSelect.appendChild(opt);
+            }
+        }
+
+        function getSelectedQuizId() {
+            const pasted = (quizIdInput.value || '').trim();
+            if (pasted) return pasted;
+            return quizSelect.value;
+        }
+
+        function ensureSet(questionId) {
+            if (!selections.has(questionId)) selections.set(questionId, new Set());
+            return selections.get(questionId);
+        }
+
+        function escapeHtml(s) {
+            return (s ?? '').toString()
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function stopTimer() {
+            if (timerHandle) clearInterval(timerHandle);
+            timerHandle = null;
+        }
+
+        function serializeSelections() {
+            const out = {};
+            for (const [questionId, selected] of selections.entries()) {
+                out[questionId] = Array.from(selected);
+            }
+            return out;
+        }
+
+        function restoreSelections(savedSelections) {
+            selections.clear();
+            for (const [questionId, answerIds] of Object.entries(savedSelections || {})) {
+                selections.set(questionId, new Set(answerIds || []));
+            }
+        }
+
+        function queueProgressSave() {
+            if (!quizDto || !getToken() || suppressSave) return;
+            if (saveHandle) clearTimeout(saveHandle);
+            saveHandle = setTimeout(() => { saveProgress().catch(() => {}); }, 350);
+        }
+
+        async function saveProgress() {
+            if (!quizDto || !getToken() || suppressSave) return;
+
+            await api.saveProgress({
+                SessionKey: sessionKey,
+                QuizId: currentQuizId,
+                QuizTitle: launchConfig?.title || quizDto.title || 'Quiz',
+                QuizCategory: quizDto.category || (launchConfig?.mode === 'selection' ? 'Mixed' : 'Uncategorized'),
+                LaunchMode: launchConfig?.mode === 'selection' ? 'selection' : 'single',
+                Quiz: {
+                    QuizId: quizDto.quizId,
+                    Title: quizDto.title,
+                    Category: quizDto.category,
+                    PassThresholdPercent: quizDto.passThresholdPercent,
+                    Questions: (quizDto.questions || []).map(q => ({
+                        QuestionId: q.id,
+                        Text: q.text,
+                        AllowMultiple: q.allowMultiple,
+                        Difficulty: q.difficulty,
+                        Tags: q.tags || [],
+                        Answers: (q.answers || []).map(a => ({ AnswerId: a.id, Text: a.text })),
+                        Images: (q.images || []).map(i => ({ FileName: i.fileName, Url: i.url }))
+                    }))
+                },
+                Selections: serializeSelections(),
+                CurrentIndex: index,
+                TimerRemainingSeconds: timerPill.style.display === 'none' ? null : Math.max(0, timerSeconds)
+            });
+        }
+
+        function startTimerIfNeeded() {
+            stopTimer();
+
+            if (timerSeconds <= 0) {
+                const minutes = Number(launchConfig?.timerMinutes || 0);
+                if (!minutes || minutes <= 0) {
+                    timerPill.style.display = 'none';
+                    return;
+                }
+
+                timerSeconds = Math.floor(minutes * 60);
+            }
+
+            timerPill.style.display = 'inline-block';
+
+            const tick = () => {
+                const mm = Math.floor(timerSeconds / 60);
+                const ss = timerSeconds % 60;
+                timerPill.textContent = `Time: ${mm}:${ss.toString().padStart(2, '0')}`;
+                timerSeconds--;
+                queueProgressSave();
+                if (timerSeconds < 0) {
+                    stopTimer();
+                    submitQuiz();
+                }
+            };
+
+            tick();
+            timerHandle = setInterval(tick, 1000);
+        }
+
+        function renderQuestion() {
+            if (!quizDto || !quizDto.questions || quizDto.questions.length === 0) {
+                questionArea.innerHTML = '<div class="muted">No questions found for this quiz.</div>';
+                return;
+            }
+
+            const q = quizDto.questions[index];
+            quizTitle.textContent = quizDto.title || 'Quiz';
+            qCounter.textContent = `Question ${index + 1} of ${quizDto.questions.length}`;
+
+            const selected = ensureSet(q.id);
+            const type = q.allowMultiple ? 'checkbox' : 'radio';
+            const groupName = `q_${q.id}`;
+
+            const images = (q.images || []);
+            const imgHtml = images.length
+                ? `<div class="imggrid">${images.map(i => `<img alt="Question image" src="${escapeHtml(i.url || ('/uploads/' + encodeURIComponent(i.fileName || '')))}" />`).join('')}</div>`
+                : '';
+
+            const metaHtml = `
+                <div class="answerMeta">
+                    <div class="pill">${q.allowMultiple ? 'Multiple answers allowed' : 'Single answer'}</div>
+                    <div class="pill">Difficulty: ${escapeHtml(q.difficulty || 'Unspecified')}</div>
+                    ${(q.tags || []).map(tag => `<div class="pill">Tag: ${escapeHtml(tag)}</div>`).join('')}
+                </div>
+            `;
+
+            const answersHtml = (q.answers || []).map(a => {
+                const checked = selected.has(a.id) ? 'checked' : '';
+                return `
+                    <label class="answer">
+                        <input type="${type}" name="${groupName}" value="${a.id}" ${checked} />
+                        <div>${escapeHtml(a.text || '')}</div>
+                    </label>
+                `;
+            }).join('');
+
+            questionArea.innerHTML = `
+                <div>
+                    <div class="qtext">${escapeHtml(q.text || '')}</div>
+                    ${metaHtml}
+                    ${imgHtml}
+                    <div class="answers">${answersHtml}</div>
+                </div>
+            `;
+
+            const inputs = questionArea.querySelectorAll(`input[name="${groupName}"]`);
+            inputs.forEach(inp => {
+                inp.addEventListener('change', () => {
+                    if (!q.allowMultiple) {
+                        selected.clear();
+                        selected.add(inp.value);
+                    } else {
+                        if (inp.checked) selected.add(inp.value);
+                        else selected.delete(inp.value);
+                    }
+                    queueProgressSave();
+                });
+            });
+
+            btnPrev.disabled = index === 0;
+            btnNext.disabled = index === quizDto.questions.length - 1;
+        }
+
+        async function loadQuiz(quizId) {
+            setStatus('Loading quiz...');
+            resultCard.style.display = 'none';
+            perQuestion.innerHTML = '';
+            selections.clear();
+            index = 0;
+            timerSeconds = 0;
+            stopTimer();
+
+            try {
+                const raw = await api.randomized(quizId);
+                quizDto = normalizeQuiz(raw);
+                currentQuizId = quizId;
+                launchConfig = null;
+                sessionKey = createSessionKey();
+                pickerCard.style.display = 'none';
+                quizCard.style.display = 'block';
+                btnRestart.disabled = false;
+                btnNewQuiz.disabled = false;
+                startTimerIfNeeded();
+                renderQuestion();
+                queueProgressSave();
+                setStatus('');
+            } catch {
+                quizCard.style.display = 'none';
+                btnRestart.disabled = true;
+                setStatus('Could not load quiz. Make sure the quizId is valid and the quiz exists.');
+            }
+        }
+
+        async function loadConfiguredQuiz(config) {
+            setStatus('Building configured quiz...');
+            resultCard.style.display = 'none';
+            perQuestion.innerHTML = '';
+            selections.clear();
+            index = 0;
+            timerSeconds = 0;
+            stopTimer();
+
+            try {
+                const raw = await api.generateSelection({
+                    QuizIds: config.quizIds || [],
+                    QuestionCount: config.questionCount,
+                    AllQuestions: !!config.allQuestions,
+                    Title: config.title || 'Configured Quiz',
+                    Difficulty: config.difficulty || 'Any',
+                    Tags: config.tags || []
+                });
+
+                quizDto = normalizeQuiz(raw);
+                currentQuizId = null;
+                launchConfig = config;
+                sessionKey = createSessionKey();
+                pickerCard.style.display = 'none';
+                quizCard.style.display = 'block';
+                btnRestart.disabled = false;
+                btnNewQuiz.disabled = false;
+                startTimerIfNeeded();
+                renderQuestion();
+                queueProgressSave();
+                setStatus('');
+            } catch {
+                clearLaunchConfig();
+                quizCard.style.display = 'none';
+                btnRestart.disabled = true;
+                setStatus('Could not build the configured quiz from the selected quiz pool and filters.');
+            }
+        }
+
+        async function maybeResumeSavedProgress() {
+            if (!getToken()) return false;
+
+            try {
+                const progress = await api.getCurrentProgress();
+                if (!progress?.quiz) return false;
+
+                const displayName = progress.quizTitle || progress.quiz?.title || 'your saved quiz';
+                if (!window.confirm(`Resume your saved progress for "${displayName}"?`)) {
+                    await api.clearProgress(progress.sessionKey);
+                    return false;
+                }
+
+                suppressSave = true;
+                quizDto = normalizeQuiz(progress.quiz);
+                currentQuizId = progress.quizId || null;
+                launchConfig = progress.launchMode === 'selection'
+                    ? { mode: 'selection', title: progress.quizTitle || progress.quiz?.title || 'Configured Quiz', timerMinutes: 0 }
+                    : null;
+                sessionKey = progress.sessionKey || createSessionKey();
+                index = Math.max(0, Math.min(Number(progress.currentIndex || 0), (quizDto.questions?.length || 1) - 1));
+                timerSeconds = Number(progress.timerRemainingSeconds || 0);
+                restoreSelections(progress.selections || {});
+                pickerCard.style.display = 'none';
+                quizCard.style.display = 'block';
+                btnRestart.disabled = false;
+                btnNewQuiz.disabled = false;
+                startTimerIfNeeded();
+                renderQuestion();
+                setStatus('');
+                return true;
+            } catch (err) {
+                if (err?.status !== 404) {
+                    console.warn('Could not restore saved progress.', err);
+                }
+                return false;
+            } finally {
+                suppressSave = false;
+            }
+        }
+
+        function buildSubmitPayload() {
+            const answers = (quizDto.questions || []).map(q => {
+                const set = ensureSet(q.id);
+                return {
+                    QuestionId: q.id,
+                    SelectedAnswerIds: Array.from(set)
+                };
+            });
+            const payload = { Answers: answers };
+            payload.SessionKey = sessionKey;
+
+            if (launchConfig?.mode === 'selection') {
+                payload.QuizTitle = launchConfig.title || quizDto?.title || 'Configured Quiz';
+                payload.QuizCategory = 'Mixed';
+            }
+
+            return payload;
+        }
+
+        async function submitQuiz() {
+            if (!quizDto) return;
+
+            setStatus('Submitting attempt...');
+            try {
+                const payload = buildSubmitPayload();
+                const res = launchConfig
+                    ? await api.submitSelection(payload)
+                    : await api.submit(currentQuizId, payload);
+
+                stopTimer();
+
+                const pct = res.ScorePercent ?? res.scorePercent ?? 0;
+                const cc = res.CorrectCount ?? res.correctCount ?? 0;
+                const tq = res.TotalQuestions ?? res.totalQuestions ?? 0;
+                const threshold = res.PassThresholdPercent ?? res.passThresholdPercent ?? quizDto?.passThresholdPercent ?? 70;
+                const passed = !!(res.Passed ?? res.passed);
+
+                resultText.innerHTML = `Score: <strong>${pct}%</strong> - ${cc} / ${tq}`;
+                resultDetail.textContent = `${passed ? 'Passed' : 'Did not meet threshold'} at ${threshold}% required. Signed-in employees can review the correct answers below.`;
+
+                const resQuestions = res.Questions ?? res.questions ?? [];
+                const byQ = new Map(resQuestions.map(x => [x.QuestionId ?? x.questionId, x]));
+
+                const blocks = (quizDto.questions || []).map((q, i) => {
+                    const r = byQ.get(q.id);
+                    const ok = r?.IsCorrect ?? r?.isCorrect;
+                    const cls = ok ? 'ok' : 'bad';
+                    const word = ok ? 'Correct' : 'Incorrect';
+                    const selectedIds = new Set((r?.SelectedAnswerIds ?? r?.selectedAnswerIds ?? []).map(String));
+                    const correctIds = new Set((r?.CorrectAnswerIds ?? r?.correctAnswerIds ?? []).map(String));
+                    const reviewAnswers = correctIds.size
+                        ? `<div class="reviewAnswers">${(q.answers || []).map(answer => {
+                            const isSelected = selectedIds.has(String(answer.id));
+                            const isCorrectAnswer = correctIds.has(String(answer.id));
+                            const reviewClass = isCorrectAnswer ? 'correct' : (isSelected ? 'selectedOnly' : '');
+                            const markers = [
+                                isSelected ? 'Selected' : '',
+                                isCorrectAnswer ? 'Correct answer' : ''
+                            ].filter(Boolean).join(' · ');
+                            return `<div class="reviewAnswer ${reviewClass}">${escapeHtml(answer.text || '')}${markers ? `<div class="muted" style="margin-top:4px;">${escapeHtml(markers)}</div>` : ''}</div>`;
+                        }).join('')}</div>`
+                        : '<div class="muted" style="margin-top:8px;">Correct answers are shown only for signed-in employees.</div>';
+
+                    return `
+                        <div class="card" style="margin: 10px 0;">
+                            <div><strong>Q${i + 1}.</strong> ${escapeHtml(q.text || '')}</div>
+                            <div class="${cls}" style="margin-top: 6px;">${word}</div>
+                            <div class="muted" style="margin-top: 4px;">Selected: ${selectedIds.size} option(s)</div>
+                            ${reviewAnswers}
+                        </div>
+                    `;
+                }).join('');
+
+                perQuestion.innerHTML = blocks;
+                resultCard.style.display = 'block';
+                btnNewQuiz.disabled = false;
+                setStatus('');
+            } catch {
+                setStatus('Submit failed. Check the API and server logs.');
+            }
+        }
+
+        async function refreshQuizListForCategory() {
+            try {
+                const selectedCategory = categorySelect.value || 'All';
+                const quizzes = normalizeQuizList(await api.listQuizzes(selectedCategory));
+                fillQuizSelect(quizzes);
+            } catch {
+                fillQuizSelect([]);
+            }
+        }
+
+        btnLoad.addEventListener('click', () => {
+            const id = getSelectedQuizId();
+            if (!id) {
+                setStatus('Pick a quiz from the dropdown, or paste a quizId.');
+                return;
+            }
+            clearLaunchConfig();
+            loadQuiz(id);
+        });
+
+        btnRestart.addEventListener('click', () => {
+            if (launchConfig) {
+                loadConfiguredQuiz(launchConfig);
+                return;
+            }
+            if (!currentQuizId) return;
+            loadQuiz(currentQuizId);
+        });
+
+        btnPrev.addEventListener('click', () => {
+            if (index > 0) {
+                index--;
+                renderQuestion();
+                queueProgressSave();
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (quizDto && index < quizDto.questions.length - 1) {
+                index++;
+                renderQuestion();
+                queueProgressSave();
+            }
+        });
+
+        btnNewQuiz.addEventListener('click', () => {
+            stopTimer();
+            currentQuizId = null;
+            quizDto = null;
+            index = 0;
+            timerSeconds = 0;
+            selections.clear();
+            resultCard.style.display = 'none';
+            quizCard.style.display = 'none';
+            btnRestart.disabled = true;
+            btnNewQuiz.disabled = true;
+
+            if (launchConfig) {
+                clearLaunchConfig();
+                window.location.href = '/';
+                return;
+            }
+
+            pickerCard.style.display = 'block';
+        });
+
+        btnSubmit.addEventListener('click', submitQuiz);
+
+        categorySelect.addEventListener('change', () => {
+            quizIdInput.value = '';
+            refreshQuizListForCategory();
+        });
+
+        (async function init() {
+            try {
+                let categories = [];
+                try {
+                    categories = await api.listCategories();
+                } catch {
+                    categories = [];
+                }
+                fillCategorySelect(Array.isArray(categories) ? categories : []);
+                await refreshQuizListForCategory();
+            } catch {
+                fillQuizSelect([]);
+            }
+
+            const config = getLaunchConfig();
+            if (config && config.mode === 'selection' && Array.isArray(config.quizIds) && config.quizIds.length) {
+                await loadConfiguredQuiz(config);
+                return;
+            }
+
+            const qid = guidFromQuery();
+            if (qid) {
+                quizIdInput.value = qid;
+                await loadQuiz(qid);
+                return;
+            }
+
+            await maybeResumeSavedProgress();
+        })();
+    </script>
+</body>
+</html>

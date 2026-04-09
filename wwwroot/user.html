@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Profile</title>
+    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <style>
+        :root {
+            --panel: #ffffff;
+            --ink: #17324d;
+            --muted: #5b6f83;
+            --line: #d7e0e8;
+            --primary: #8f1d2c;
+            --secondary: #0d5e8c;
+            --shadow: 0 14px 34px rgba(20, 44, 68, 0.08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--ink);
+        }
+        .shell {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .topbarActions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        h1 { margin: 0 0 8px; font-size: 2.2rem; }
+        .lede { margin: 0; color: var(--muted); }
+        .grid {
+            display: grid;
+            grid-template-columns: 0.9fr 1.1fr;
+            gap: 18px;
+            margin-top: 18px;
+        }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: var(--shadow);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .stat {
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 12px;
+            background: #f8fbfd;
+        }
+        .stat strong {
+            display: block;
+            font-size: 1.4rem;
+            margin-bottom: 4px;
+        }
+        .muted { color: var(--muted); }
+        .status { white-space: pre-wrap; color: var(--muted); }
+        .formStatus {
+            white-space: pre-wrap;
+            font-size: 0.95rem;
+            margin-top: 8px;
+        }
+        .formStatus.ok { color: #1d6b4f; }
+        .formStatus.error { color: #a1242f; }
+        .authGrid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+            margin-top: 18px;
+        }
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        input, button {
+            width: 100%;
+            font: inherit;
+        }
+        input {
+            padding: 11px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: white;
+            margin-bottom: 12px;
+        }
+        button {
+            border: none;
+            border-radius: 12px;
+            padding: 11px 14px;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+            background: var(--secondary);
+        }
+        .primaryButton {
+            background: var(--primary);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--line);
+        }
+        .empty {
+            padding: 18px 0 4px;
+            color: var(--muted);
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .toolbar select {
+            max-width: 220px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: white;
+        }
+        @media (max-width: 900px) {
+            .grid, .stats, .authGrid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <nav class="site-menu" aria-label="Site">
+            <a href="/">Home</a>
+            <a href="/register.html">Registration</a>
+            <a href="/user.html">User Page</a>
+            <a href="/manage.html">Management Panel</a>
+            <a href="/preemployment.html">Pre-Employment</a>
+            <a href="/api.html">API Tools</a>
+        </nav>
+        <div class="topbar">
+            <div>
+                <h1 id="profileHeading">User Profile</h1>
+                <p class="lede">Sign in to open your user page, review quiz history, update your account, and manage your password.</p>
+            </div>
+            <div class="topbarActions">
+                <a class="app-link" href="#" id="logoutBtn">Logout</a>
+                <a class="app-link" href="/">Back To Quiz Selection</a>
+            </div>
+        </div>
+
+        <div id="status" class="status">Loading user page...</div>
+
+        <section class="authGrid" id="authGrid">
+            <article class="card">
+                <h2>Need An Account?</h2>
+                <p class="muted">New employees can register here, or go to the registration page before signing in.</p>
+                <form id="registerForm">
+                    <label for="registerFirstName">First Name</label>
+                    <input id="registerFirstName" type="text" autocomplete="given-name" placeholder="First name" required />
+                    <label for="registerLastName">Last Name</label>
+                    <input id="registerLastName" type="text" autocomplete="family-name" placeholder="Last name" required />
+                    <label for="registerEmail">Email</label>
+                    <input id="registerEmail" type="email" autocomplete="email" placeholder="employee@example.com" required />
+                    <label for="registerPassword">Password</label>
+                    <input id="registerPassword" type="password" autocomplete="new-password" placeholder="Create password" required />
+                    <button class="primaryButton" type="submit">Register</button>
+                </form>
+                <div id="registerStatus" class="formStatus"></div>
+            </article>
+
+            <article class="card">
+                <h2>Sign In</h2>
+                <p class="muted">Use your account to load your saved quiz history.</p>
+                <form id="loginForm">
+                    <label for="loginEmail">Email</label>
+                    <input id="loginEmail" type="email" autocomplete="username" placeholder="employee@example.com" required />
+                    <label for="loginPassword">Password</label>
+                    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter password" required />
+                    <button type="submit">Sign In</button>
+                </form>
+                <div id="loginStatus" class="formStatus"></div>
+            </article>
+        </section>
+
+        <section class="grid" id="profileGrid" style="display:none;">
+            <article class="card">
+                <h2>Account</h2>
+                <div id="accountBlock"></div>
+                <div class="stats">
+                    <div class="stat">
+                        <strong id="totalAttempts">0</strong>
+                        <span class="muted">Attempts</span>
+                    </div>
+                    <div class="stat">
+                        <strong id="averageScore">0%</strong>
+                        <span class="muted">Average Score</span>
+                    </div>
+                    <div class="stat">
+                        <strong id="bestScore">0%</strong>
+                        <span class="muted">Best Score</span>
+                    </div>
+                </div>
+                <hr style="border:0;border-top:1px solid var(--line);margin:18px 0;" />
+                <h2>Edit Profile</h2>
+                <form id="editProfileForm">
+                    <label for="editFirstName">First Name</label>
+                    <input id="editFirstName" type="text" autocomplete="given-name" placeholder="First name" required />
+                    <label for="editLastName">Last Name</label>
+                    <input id="editLastName" type="text" autocomplete="family-name" placeholder="Last name" required />
+                    <button class="primaryButton" type="submit">Save Profile</button>
+                </form>
+                <div id="editProfileStatus" class="formStatus"></div>
+                <hr style="border:0;border-top:1px solid var(--line);margin:18px 0;" />
+                <h2>Change Password</h2>
+                <form id="changePasswordForm">
+                    <label for="currentPassword">Current Password</label>
+                    <input id="currentPassword" type="password" autocomplete="current-password" placeholder="Current password" required />
+                    <label for="newPassword">New Password</label>
+                    <input id="newPassword" type="password" autocomplete="new-password" placeholder="New password" required />
+                    <button type="submit">Update Password</button>
+                </form>
+                <div id="changePasswordStatus" class="formStatus"></div>
+            </article>
+
+            <article class="card">
+                <h2>Quiz History</h2>
+                <div class="toolbar">
+                    <label for="historySort" style="margin:0;">Sort</label>
+                    <select id="historySort">
+                        <option value="submitted_desc">Newest first</option>
+                        <option value="submitted_asc">Oldest first</option>
+                        <option value="score_desc">Highest score</option>
+                        <option value="score_asc">Lowest score</option>
+                        <option value="title_asc">Quiz title A-Z</option>
+                        <option value="title_desc">Quiz title Z-A</option>
+                    </select>
+                    <label for="historyPageSize" style="margin:0;">Page size</label>
+                    <select id="historyPageSize">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+                <div id="historyEmpty" class="empty" style="display:none;">No tracked quiz attempts yet. Sign in before taking a normal quiz and your results will appear here.</div>
+                <table id="historyTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Quiz</th>
+                            <th>Category</th>
+                            <th>Score</th>
+                            <th>Correct</th>
+                            <th>Submitted</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+                <div class="toolbar" id="historyPager" style="display:none;">
+                    <button type="button" id="prevPageBtn">Previous</button>
+                    <span class="muted" id="historyPageInfo">Page 1 of 1</span>
+                    <button type="button" id="nextPageBtn">Next</button>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <script>
+        const status = document.getElementById('status');
+        const profileGrid = document.getElementById('profileGrid');
+        const accountBlock = document.getElementById('accountBlock');
+        const totalAttempts = document.getElementById('totalAttempts');
+        const averageScore = document.getElementById('averageScore');
+        const bestScore = document.getElementById('bestScore');
+        const profileHeading = document.getElementById('profileHeading');
+        const historyEmpty = document.getElementById('historyEmpty');
+        const historyTable = document.getElementById('historyTable');
+        const historyBody = document.getElementById('historyBody');
+        const historySort = document.getElementById('historySort');
+        const historyPageSize = document.getElementById('historyPageSize');
+        const historyPager = document.getElementById('historyPager');
+        const historyPageInfo = document.getElementById('historyPageInfo');
+        const prevPageBtn = document.getElementById('prevPageBtn');
+        const nextPageBtn = document.getElementById('nextPageBtn');
+        const authGrid = document.getElementById('authGrid');
+        const registerForm = document.getElementById('registerForm');
+        const loginForm = document.getElementById('loginForm');
+        const registerStatus = document.getElementById('registerStatus');
+        const loginStatus = document.getElementById('loginStatus');
+        const editProfileForm = document.getElementById('editProfileForm');
+        const editProfileStatus = document.getElementById('editProfileStatus');
+        const changePasswordForm = document.getElementById('changePasswordForm');
+        const changePasswordStatus = document.getElementById('changePasswordStatus');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const registerFirstName = document.getElementById('registerFirstName');
+        const registerLastName = document.getElementById('registerLastName');
+        const registerEmail = document.getElementById('registerEmail');
+        const loginEmail = document.getElementById('loginEmail');
+        const editFirstName = document.getElementById('editFirstName');
+        const editLastName = document.getElementById('editLastName');
+        let currentHistoryPage = 1;
+
+        function getToken() {
+            return localStorage.getItem('jwtToken') || localStorage.getItem('apiJwtToken') || '';
+        }
+
+        function saveToken(token) {
+            localStorage.setItem('jwtToken', token);
+            localStorage.setItem('apiJwtToken', token);
+        }
+
+        function clearToken() {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('apiJwtToken');
+        }
+
+        function setFormStatus(el, message, isError) {
+            el.textContent = message || '';
+            el.className = 'formStatus ' + (isError ? 'error' : 'ok');
+        }
+
+        function setProfileHeading(firstName, lastName) {
+            const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+            profileHeading.textContent = fullName || 'User Profile';
+        }
+
+        function focusAccountSection() {
+            const hash = (window.location.hash || '').toLowerCase();
+            if (hash === '#register') {
+                registerEmail?.focus();
+            } else if (hash === '#signin') {
+                loginEmail?.focus();
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function formatDate(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            return isNaN(date.getTime()) ? value : date.toLocaleString();
+        }
+
+        function getValue(obj, ...keys) {
+            for (const key of keys) {
+                if (obj && obj[key] !== undefined && obj[key] !== null) {
+                    return obj[key];
+                }
+            }
+            return '';
+        }
+
+        async function loadProfile(page = currentHistoryPage) {
+            const token = getToken();
+            if (!token) {
+                status.textContent = 'Sign in to view your user page. New users can register below or on the registration page.';
+                authGrid.style.display = 'grid';
+                profileGrid.style.display = 'none';
+                setProfileHeading('', '');
+                focusAccountSection();
+                return;
+            }
+
+            try {
+                currentHistoryPage = page;
+                const res = await fetch(`/api/profile?page=${page}&pageSize=${encodeURIComponent(historyPageSize.value)}&sort=${encodeURIComponent(historySort.value)}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                if (res.status === 401) {
+                    status.textContent = 'Your session is no longer valid. Sign in again to view your profile.';
+                    authGrid.style.display = 'grid';
+                    profileGrid.style.display = 'none';
+                    setProfileHeading('', '');
+                    focusAccountSection();
+                    return;
+                }
+
+                if (!res.ok) {
+                    status.textContent = 'Could not load profile.';
+                    authGrid.style.display = 'grid';
+                    setProfileHeading('', '');
+                    focusAccountSection();
+                    return;
+                }
+
+                const profile = await res.json();
+                const firstName = getValue(profile, 'FirstName', 'firstName');
+                const lastName = getValue(profile, 'LastName', 'lastName');
+                const email = getValue(profile, 'Email', 'email');
+                const userName = getValue(profile, 'UserName', 'userName');
+                const totalAttemptCount = Number(getValue(profile, 'TotalAttempts', 'totalAttempts') || 0);
+                const avgScore = getValue(profile, 'AverageScorePercent', 'averageScorePercent') || 0;
+                const topScore = getValue(profile, 'BestScorePercent', 'bestScorePercent') || 0;
+                const totalPages = Number(getValue(profile, 'TotalPages', 'totalPages') || 1);
+                const currentPage = Number(getValue(profile, 'Page', 'page') || 1);
+                const sortValue = getValue(profile, 'Sort', 'sort') || 'submitted_desc';
+
+                setProfileHeading(firstName, lastName);
+                historySort.value = sortValue;
+                accountBlock.innerHTML = `
+                    <div><strong>${escapeHtml([firstName, lastName].filter(Boolean).join(' ') || userName || email || '')}</strong></div>
+                    <div class="muted" style="margin-top:4px;">${escapeHtml(email || '')}</div>
+                `;
+                editFirstName.value = firstName;
+                editLastName.value = lastName;
+                totalAttempts.textContent = String(totalAttemptCount);
+                averageScore.textContent = `${avgScore}%`;
+                bestScore.textContent = `${topScore}%`;
+
+                const attempts = Array.isArray(profile.Attempts) ? profile.Attempts : (Array.isArray(profile.attempts) ? profile.attempts : []);
+                historyBody.innerHTML = '';
+                if (!attempts.length) {
+                    historyEmpty.style.display = 'block';
+                    historyTable.style.display = 'none';
+                    historyPager.style.display = 'none';
+                } else {
+                    historyEmpty.style.display = 'none';
+                    historyTable.style.display = 'table';
+                    historyPager.style.display = 'flex';
+                    historyPageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                    prevPageBtn.disabled = currentPage <= 1;
+                    nextPageBtn.disabled = currentPage >= totalPages;
+                    for (const attempt of attempts) {
+                        const quizTitle = getValue(attempt, 'QuizTitle', 'quizTitle');
+                        const quizCategory = getValue(attempt, 'QuizCategory', 'quizCategory');
+                        const scorePercent = getValue(attempt, 'ScorePercent', 'scorePercent') || 0;
+                        const correctCount = getValue(attempt, 'CorrectCount', 'correctCount') || 0;
+                        const totalQuestions = getValue(attempt, 'TotalQuestions', 'totalQuestions') || 0;
+                        const submittedUtc = getValue(attempt, 'SubmittedUtc', 'submittedUtc');
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${escapeHtml(quizTitle)}</td>
+                            <td>${escapeHtml(quizCategory)}</td>
+                            <td>${escapeHtml(scorePercent)}%</td>
+                            <td>${escapeHtml(correctCount)} / ${escapeHtml(totalQuestions)}</td>
+                            <td>${escapeHtml(formatDate(submittedUtc))}</td>
+                        `;
+                        historyBody.appendChild(tr);
+                    }
+                }
+
+                status.textContent = '';
+                authGrid.style.display = 'none';
+                profileGrid.style.display = 'grid';
+            } catch (err) {
+                console.error(err);
+                status.textContent = 'Could not load profile.';
+                authGrid.style.display = 'grid';
+                setProfileHeading('', '');
+                focusAccountSection();
+            }
+        }
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const firstName = registerFirstName.value.trim();
+            const lastName = registerLastName.value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const password = document.getElementById('registerPassword').value;
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName, lastName, email, password })
+                });
+
+                const text = await res.text();
+                if (!res.ok) {
+                    setFormStatus(registerStatus, text || 'Registration failed.', true);
+                    return;
+                }
+
+                setFormStatus(registerStatus, text || 'Registration complete. You can sign in now.', false);
+                registerForm.reset();
+                loginEmail.value = email;
+                window.location.hash = 'signin';
+                loginEmail.focus();
+            } catch (err) {
+                console.error(err);
+                setFormStatus(registerStatus, 'Registration failed.', true);
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const payload = await res.json().catch(() => null);
+                if (!res.ok || !payload?.token) {
+                    setFormStatus(loginStatus, payload?.title || payload?.message || 'Sign-in failed.', true);
+                    return;
+                }
+
+                saveToken(payload.token);
+                setFormStatus(loginStatus, 'Sign-in successful. Loading your profile...', false);
+                await loadProfile(1);
+            } catch (err) {
+                console.error(err);
+                setFormStatus(loginStatus, 'Sign-in failed.', true);
+            }
+        });
+
+        editProfileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = getToken();
+            try {
+                const res = await fetch('/api/profile', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({
+                        firstName: editFirstName.value.trim(),
+                        lastName: editLastName.value.trim()
+                    })
+                });
+
+                const text = await res.text();
+                if (!res.ok) {
+                    setFormStatus(editProfileStatus, text || 'Profile update failed.', true);
+                    return;
+                }
+
+                setFormStatus(editProfileStatus, 'Profile updated.', false);
+                await loadProfile(currentHistoryPage);
+            } catch (err) {
+                console.error(err);
+                setFormStatus(editProfileStatus, 'Profile update failed.', true);
+            }
+        });
+
+        changePasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = getToken();
+            try {
+                const res = await fetch('/api/profile/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({
+                        currentPassword: document.getElementById('currentPassword').value,
+                        newPassword: document.getElementById('newPassword').value
+                    })
+                });
+
+                const text = await res.text();
+                if (!res.ok) {
+                    setFormStatus(changePasswordStatus, text || 'Password update failed.', true);
+                    return;
+                }
+
+                changePasswordForm.reset();
+                setFormStatus(changePasswordStatus, 'Password updated.', false);
+            } catch (err) {
+                console.error(err);
+                setFormStatus(changePasswordStatus, 'Password update failed.', true);
+            }
+        });
+
+        historySort.addEventListener('change', () => loadProfile(1));
+        historyPageSize.addEventListener('change', () => loadProfile(1));
+        prevPageBtn.addEventListener('click', () => loadProfile(Math.max(1, currentHistoryPage - 1)));
+        nextPageBtn.addEventListener('click', () => loadProfile(currentHistoryPage + 1));
+
+        logoutBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            clearToken();
+            profileGrid.style.display = 'none';
+            authGrid.style.display = 'grid';
+            setProfileHeading('', '');
+            status.textContent = 'You have been signed out.';
+            setFormStatus(loginStatus, '', false);
+            setFormStatus(registerStatus, '', false);
+            setFormStatus(editProfileStatus, '', false);
+            setFormStatus(changePasswordStatus, '', false);
+            loginForm.reset();
+            editProfileForm.reset();
+            changePasswordForm.reset();
+            await loadProfile();
+        });
+
+        if (!window.location.hash) {
+            window.location.hash = '#signin';
+        }
+
+        loadProfile();
+    </script>
+</body>
+</html>

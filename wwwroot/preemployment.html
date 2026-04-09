@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pre-Employment Quiz</title>
+    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <style>
+        :root {
+            --bg: #f3f6f9;
+            --panel: #ffffff;
+            --ink: #17324d;
+            --muted: #5b6f83;
+            --line: #d7e0e8;
+            --primary: #8f1d2c;
+            --secondary: #0d5e8c;
+            --shadow: 0 14px 34px rgba(20, 44, 68, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 28px 18px 36px;
+            color: var(--ink);
+        }
+
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 2.2rem;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 18px;
+            margin: 14px 0;
+            box-shadow: var(--shadow);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        label {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        input[type="text"] {
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid #cfc5b6;
+            background: white;
+            color: var(--ink);
+            min-width: 260px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: none;
+            background: var(--secondary);
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:hover {
+            filter: brightness(0.96);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .qtext {
+            font-size: 18px;
+            margin: 0 0 10px;
+        }
+
+        .progress {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .answers {
+            display: grid;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .answer {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: #fcf8f1;
+        }
+
+        .answer input {
+            margin-top: 3px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: #efe6d8;
+            border: 1px solid #e2d5c1;
+            font-size: 12px;
+        }
+
+        .imggrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin: 12px 0 0;
+        }
+
+        .imggrid img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: white;
+        }
+
+        .result {
+            font-size: 18px;
+            line-height: 1.6;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <nav class="site-menu" aria-label="Site">
+            <a href="/">Home</a>
+            <a href="/register.html">Registration</a>
+            <a href="/user.html">User Page</a>
+            <a href="/manage.html">Management Panel</a>
+            <a href="/preemployment.html">Pre-Employment</a>
+            <a href="/api.html">API Tools</a>
+        </nav>
+        <h1 id="pageTitle">Pre-Employment Quiz</h1>
+
+        <div class="card" id="setupCard">
+            <div class="row" style="justify-content: space-between;">
+                <div>
+                    <div class="muted" id="setupDescription">This quiz is configured by an administrator and pulls the saved number of random questions from each selected source exam.</div>
+                    <div class="muted" style="margin-top:6px;" id="sourceQuizLine">Selected source exams: not configured</div>
+                </div>
+                <div class="pill" id="countPill">20 per selected exam</div>
+            </div>
+
+            <div class="row" style="margin-top: 12px;">
+                <div>
+                    <label for="firstName">First Name</label><br />
+                    <input id="firstName" type="text" placeholder="First name" />
+                </div>
+                <div>
+                    <label for="lastName">Last Name</label><br />
+                    <input id="lastName" type="text" placeholder="Last name" />
+                </div>
+            </div>
+
+            <div class="row" style="margin-top: 12px;">
+                <button id="btnStart">Start test</button>
+            </div>
+
+            <div class="muted" id="status" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="card" id="quizCard" style="display:none;">
+            <div class="progress">
+                <div>
+                    <div class="muted" id="quizTitle"></div>
+                    <div class="row" style="margin-top:6px;">
+                        <span class="pill" id="qCounter">Question</span>
+                        <span class="pill" id="timerPill" style="display:none;">Timer</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <button id="btnPrev">&lt;- Prev</button>
+                    <button id="btnNext">Next -&gt;</button>
+                    <button id="btnSubmit">Submit</button>
+                </div>
+            </div>
+
+            <hr style="border:0;border-top:1px solid var(--line);margin:14px 0;" />
+
+            <div id="questionArea"></div>
+        </div>
+
+        <div class="card" id="resultCard" style="display:none;">
+            <div class="result" id="resultText"></div>
+            <div class="muted" id="resultDetail" style="margin-top: 8px;"></div>
+            <div style="margin-top: 12px;" id="perQuestion"></div>
+        </div>
+    </div>
+
+    <script>
+        // Normalize JSON keys to camelCase so the UI works regardless of serializer settings.
+        function toCamelKey(k) {
+            if (!k || typeof k !== 'string') return k;
+            return k.length === 1 ? k.toLowerCase() : (k[0].toLowerCase() + k.slice(1));
+        }
+        function normalizeKeys(x) {
+            if (Array.isArray(x)) return x.map(normalizeKeys);
+            if (x && typeof x === 'object') {
+                const o = {};
+                for (const [k, v] of Object.entries(x)) o[toCamelKey(k)] = normalizeKeys(v);
+                return o;
+            }
+            return x;
+        }
+
+        function escapeHtml(s) {
+            return (s ?? '').toString()
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+        function escapeHtmlAttr(s) {
+            return escapeHtml(s).replaceAll('`', '&#96;');
+        }
+
+        const el = (id) => document.getElementById(id);
+
+        const pageTitle = el('pageTitle');
+        const setupCard = el('setupCard');
+        const quizCard = el('quizCard');
+        const resultCard = el('resultCard');
+
+        const status = el('status');
+        const countPill = el('countPill');
+        const setupDescription = el('setupDescription');
+        const sourceQuizLine = el('sourceQuizLine');
+        const firstName = el('firstName');
+        const lastName = el('lastName');
+
+        const btnStart = el('btnStart');
+
+        const quizTitle = el('quizTitle');
+        const qCounter = el('qCounter');
+        const timerPill = el('timerPill');
+        const questionArea = el('questionArea');
+
+        const btnPrev = el('btnPrev');
+        const btnNext = el('btnNext');
+        const btnSubmit = el('btnSubmit');
+        const resultText = el('resultText');
+        const resultDetail = el('resultDetail');
+        const perQuestion = el('perQuestion');
+
+        const api = {
+            getConfig: () => fetch('/api/preemployment/config', { cache: 'no-store' })
+                .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText)))
+                .then(normalizeKeys),
+            generate: (payload) => fetch('/api/preemployment/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText))).then(normalizeKeys),
+            submit: (payload) => fetch('/api/preemployment/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText))).then(normalizeKeys)
+        };
+
+        let config = {
+            title: 'Pre-Employment Quiz',
+            questionCount: 20,
+            maxQuestionCount: 20,
+            quizId: null,
+            quizIds: [],
+            quizTitle: null,
+            quizTitles: [],
+            timeLimitMinutes: 0,
+            passingScorePercent: 70,
+            randomizeAnswers: true,
+            showCorrectAnswersAtEnd: false
+        };
+
+        let quizDto = null;
+        let index = 0;
+        const selections = new Map(); // Map<QuestionId, Set<AnswerId>>
+
+        let timerSeconds = 0;
+        let timerHandle = null;
+
+        function setStatus(msg) { status.textContent = msg || ''; }
+
+        function ensureSet(questionId) {
+            if (!selections.has(questionId)) selections.set(questionId, new Set());
+            return selections.get(questionId);
+        }
+
+        function startTimerIfNeeded() {
+            stopTimer();
+
+            const minutes = Number(config.timeLimitMinutes || 0);
+            if (!minutes || minutes <= 0) {
+                timerPill.style.display = 'none';
+                return;
+            }
+
+            timerSeconds = Math.floor(minutes * 60);
+            timerPill.style.display = 'inline-block';
+
+            const tick = () => {
+                const mm = Math.floor(timerSeconds / 60);
+                const ss = timerSeconds % 60;
+                timerPill.textContent = `Time: ${mm}:${ss.toString().padStart(2, '0')}`;
+                timerSeconds--;
+                if (timerSeconds < 0) {
+                    stopTimer();
+                    submitQuiz(true);
+                }
+            };
+
+            tick();
+            timerHandle = setInterval(tick, 1000);
+        }
+
+        function stopTimer() {
+            if (timerHandle) clearInterval(timerHandle);
+            timerHandle = null;
+        }
+
+        function renderQuestion() {
+            if (!quizDto || !quizDto.questions || quizDto.questions.length === 0) {
+                questionArea.innerHTML = '<div class="muted">No questions found.</div>';
+                return;
+            }
+
+            const q = quizDto.questions[index];
+            quizTitle.textContent = quizDto.title || config.title || 'Pre-Employment Quiz';
+            qCounter.textContent = `Question ${index + 1} of ${quizDto.questions.length}`;
+
+            const selected = ensureSet(q.questionId);
+            const type = q.allowMultiple ? 'checkbox' : 'radio';
+            const groupName = `q_${q.questionId}`;
+
+            const images = (q.images || []);
+            const imgHtml = images.length
+                ? `<div class="imggrid">${images.map(i => `<img alt="Question image" src="${escapeHtmlAttr(i.url || ('/uploads/' + encodeURIComponent(i.fileName || '')))}" />`).join('')}</div>`
+                : '';
+
+            const answers = (q.answers || []);
+            const answersHtml = answers.map(a => {
+                const checked = selected.has(a.answerId) ? 'checked' : '';
+                return `
+                    <label class="answer">
+                        <input type="${type}" name="${groupName}" value="${a.answerId}" ${checked} />
+                        <div>${escapeHtml(a.text || '')}</div>
+                    </label>
+                `;
+            }).join('');
+
+            questionArea.innerHTML = `
+                <div>
+                    <div class="row" style="justify-content: space-between;">
+                        <div class="qtext">${escapeHtml(q.text || '')}</div>
+                        <div class="pill">${q.allowMultiple ? 'Multiple answers allowed' : 'Single answer'}</div>
+                    </div>
+                    ${imgHtml}
+                    <div class="answers">${answersHtml}</div>
+                </div>
+            `;
+
+            const inputs = questionArea.querySelectorAll(`input[name="${groupName}"]`);
+            inputs.forEach(inp => {
+                inp.addEventListener('change', () => {
+                    if (!q.allowMultiple) {
+                        selected.clear();
+                        selected.add(inp.value);
+                    } else {
+                        if (inp.checked) selected.add(inp.value);
+                        else selected.delete(inp.value);
+                    }
+                });
+            });
+
+            btnPrev.disabled = index === 0;
+            btnNext.disabled = index === quizDto.questions.length - 1;
+        }
+
+        function buildSubmitPayload() {
+            const answers = (quizDto.questions || []).map(q => {
+                const set = ensureSet(q.questionId);
+                return {
+                    QuestionId: q.questionId,
+                    SelectedAnswerIds: Array.from(set)
+                };
+            });
+            return {
+                Answers: answers,
+                FirstName: firstName.value.trim(),
+                LastName: lastName.value.trim()
+            };
+        }
+
+        async function generateQuiz() {
+            setStatus('Generating test...');
+            resultCard.style.display = 'none';
+            perQuestion.innerHTML = '';
+
+            const selectedQuizIds = Array.isArray(config.quizIds) && config.quizIds.length
+                ? config.quizIds
+                : (config.quizId ? [config.quizId] : []);
+
+            if (!selectedQuizIds.length) {
+                setStatus('This page has not been configured yet. Please contact an administrator.');
+                return;
+            }
+
+            if (!firstName.value.trim() || !lastName.value.trim()) {
+                setStatus('Enter your first and last name before starting the test.');
+                return;
+            }
+
+            const desired = Math.min(Number(config.questionCount || 20), Number(config.maxQuestionCount || 20));
+
+            try {
+                const res = await api.generate({
+                    QuizIds: selectedQuizIds,
+                    QuestionCount: desired,
+                    Title: config.title
+                });
+
+                quizDto = res;
+                index = 0;
+                selections.clear();
+
+                setupCard.style.display = 'none';
+                quizCard.style.display = 'block';
+
+                startTimerIfNeeded();
+                renderQuestion();
+                setStatus('');
+            } catch (e) {
+                setStatus(typeof e === 'string' ? e : 'Could not generate test.');
+            }
+        }
+
+        async function submitQuiz(autoSubmitted) {
+            if (!quizDto) return;
+            setStatus(autoSubmitted ? 'Time is up. Submitting...' : 'Submitting...');
+
+            try {
+                const payload = buildSubmitPayload();
+                const res = await api.submit(payload);
+
+                stopTimer();
+                resultText.innerHTML = `
+                    <strong>Thank you for completing the pre-employment quiz.</strong><br />
+                    Your responses have been recorded, and someone will be with you shortly.
+                `;
+                resultDetail.textContent = 'You can now wait for the next step in the process.';
+                perQuestion.innerHTML = '';
+                quizCard.style.display = 'none';
+                resultCard.style.display = 'block';
+                setStatus('');
+            } catch (e) {
+                setStatus(typeof e === 'string' ? e : 'Submit failed. Check the API and server logs.');
+            }
+        }
+
+        function restart() {
+            stopTimer();
+            quizDto = null;
+            index = 0;
+            selections.clear();
+            quizCard.style.display = 'none';
+            resultCard.style.display = 'none';
+            setupCard.style.display = 'block';
+            setStatus('');
+        }
+
+        btnStart.addEventListener('click', generateQuiz);
+
+        btnPrev.addEventListener('click', () => {
+            if (index > 0) {
+                index--;
+                renderQuestion();
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (quizDto && index < quizDto.questions.length - 1) {
+                index++;
+                renderQuestion();
+            }
+        });
+
+        btnSubmit.addEventListener('click', () => submitQuiz(false));
+        async function loadConfig() {
+            try {
+                const cfg = await api.getConfig();
+                config = Object.assign(config, cfg || {});
+            } catch {
+                // ignore; keep defaults
+            }
+
+            pageTitle.textContent = config.title || 'Pre-Employment Quiz';
+            document.title = pageTitle.textContent;
+
+            const desired = Math.min(Number(config.questionCount || 20), Number(config.maxQuestionCount || 20));
+            const selectedTitles = Array.isArray(config.quizTitles) && config.quizTitles.length
+                ? config.quizTitles
+                : (config.quizTitle ? [config.quizTitle] : []);
+            const totalQuestions = selectedTitles.length ? desired * selectedTitles.length : desired;
+            countPill.textContent = selectedTitles.length
+                ? `${desired} per selected exam • ${totalQuestions} total`
+                : `${desired} per selected exam`;
+            sourceQuizLine.textContent = selectedTitles.length
+                ? `Selected source exams: ${selectedTitles.join(', ')}`
+                : 'Selected source exams: not configured';
+            setupDescription.textContent = selectedTitles.length
+                ? 'This quiz is configured by an administrator and pulls the saved number of random questions from each selected source exam.'
+                : 'This quiz has not been configured yet. An administrator needs to choose at least one source exam first.';
+            btnStart.disabled = selectedTitles.length === 0;
+        }
+
+        async function init() {
+            await loadConfig();
+            const selectedTitles = Array.isArray(config.quizTitles) && config.quizTitles.length
+                ? config.quizTitles
+                : (config.quizTitle ? [config.quizTitle] : []);
+            setStatus(selectedTitles.length ? '' : 'Pre-employment quiz is not configured yet.');
+        }
+
+        init();
+    </script>
+</body>
+</html>

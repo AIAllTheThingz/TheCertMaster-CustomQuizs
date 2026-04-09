@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuizAPI Site Pages</title>
+    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <style>
+        :root {
+            --bg: #f3f6f9;
+            --panel: #ffffff;
+            --ink: #17324d;
+            --muted: #5b6f83;
+            --accent: #0d5e8c;
+            --accent-2: #8f1d2c;
+            --line: #d7e0e8;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--ink);
+            min-height: 100vh;
+        }
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 48px 20px 64px;
+        }
+        h1 {
+            font-size: 3rem;
+            margin: 0 0 10px;
+        }
+        p.lead {
+            color: var(--muted);
+            font-size: 1.05rem;
+            max-width: 720px;
+            margin-bottom: 28px;
+        }
+        .toplink {
+            margin-bottom: 22px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+        }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 14px 34px rgba(20, 44, 68, 0.08);
+        }
+        .card h2 {
+            margin: 0 0 10px;
+            font-size: 1.2rem;
+        }
+        .card p {
+            margin: 0 0 16px;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .card a {
+            display: inline-block;
+            text-decoration: none;
+            color: white;
+            background: var(--accent);
+            padding: 10px 14px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+        .card.api a { background: var(--accent-2); }
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <nav class="site-menu" aria-label="Site">
+            <a href="/">Home</a>
+            <a href="/register.html">Registration</a>
+            <a href="/user.html">User Page</a>
+            <a href="/manage.html">Management Panel</a>
+            <a href="/preemployment.html">Pre-Employment</a>
+            <a href="/api.html">API Tools</a>
+        </nav>
+        <h1>QuizAPI Site Pages</h1>
+        <p class="lead">Choose a destination page for the site. The main root handles quiz selection, while registration, user access, administration, and tools live on their own routes.</p>
+        <section class="grid">
+            <article class="card">
+                <h2>Management Panel</h2>
+                <p>Open the main admin and management panel for quiz imports, users, reports, SMTP, and pre-employment setup.</p>
+                <a href="/manage.html">Open Admin Panel</a>
+            </article>
+            <article class="card">
+                <h2>Quiz Selector</h2>
+                <p>Launch the quiz selection flow directly for standard quiz delivery and submissions.</p>
+                <a href="/quiz.html">Open Quiz Selector</a>
+            </article>
+            <article class="card">
+                <h2>User Page</h2>
+                <p>Employees can sign in, review tracked quiz history, update their account, and manage passwords.</p>
+                <a href="/user.html">Open User Page</a>
+            </article>
+            <article class="card">
+                <h2>Registration</h2>
+                <p>Send new employees to the registration page to create an account before signing in on the user page.</p>
+                <a href="/register.html">Open Registration</a>
+            </article>
+            <article class="card">
+                <h2>Pre-Employment</h2>
+                <p>Run the pre-employment quiz flow with the saved admin-managed configuration.</p>
+                <a href="/preemployment.html">Open Pre-Employment</a>
+            </article>
+            <article class="card api">
+                <h2>API Tools</h2>
+                <p>Use guided forms for login and user creation, then browse the full Swagger API reference.</p>
+                <a href="/api.html">Open API Page</a>
+            </article>
+        </section>
+    </main>
+</body>
+</html>

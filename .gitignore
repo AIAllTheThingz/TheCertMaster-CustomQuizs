@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+
+# Test output
+TestResults/
+
+# IDE files
+.vs/
+*.user
+*.suo
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Local .NET tools and packages
+.config/dotnet-tools.json
+
+# Logs
+*.log
+
+# Local archives and publish output
+publish/
+DeploymentBundle/
+QuizAPI_Corporate.zip
+OtherMigrations/QuizAPI_Corporate_Source.zip

@@ -1,0 +1,2308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>QuizAPI Management Panel</title>
+    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <style>
+        :root {
+            --bg: #f3f6f9;
+            --panel: #ffffff;
+            --ink: #17324d;
+            --muted: #5b6f83;
+            --line: #d7e0e8;
+            --primary: #8f1d2c;
+            --secondary: #0d5e8c;
+            --danger: #8f1d2c;
+            --danger-hover: #741722;
+            --shadow: 0 14px 34px rgba(20, 44, 68, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--ink);
+        }
+
+        .page {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 2.2rem;
+        }
+
+        .topnav {
+            margin: 0 0 20px;
+            color: var(--muted);
+        }
+
+
+        form, #fileTable, #userManager, #smtpSettings, #quizSection, #questionEditorSection, #quizCreatorSection, #historySection, #preEmploymentSettings {
+            margin-bottom: 1.25rem;
+            background: var(--panel);
+            padding: 1.25rem;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow);
+        }
+
+        input, button, select, textarea {
+            font-size: 1rem;
+            padding: 0.68rem 0.8rem;
+            margin-top: 0.5rem;
+            border-radius: 12px;
+        }
+
+        input, select, textarea {
+            border: 1px solid #cfc5b6;
+            background: white;
+            color: var(--ink);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.5;
+        }
+
+        button {
+            cursor: pointer;
+            background: var(--secondary);
+            color: white;
+            border: none;
+            font-weight: 700;
+        }
+
+        button:hover {
+            filter: brightness(0.96);
+        }
+
+        .danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .danger:hover {
+            background: var(--danger-hover);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.65rem 0.5rem;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+        }
+
+        #status {
+            white-space: pre-wrap;
+            font-family: Consolas, "Courier New", monospace;
+            margin-top: 1rem;
+            color: var(--ink);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            padding: 1rem 1.25rem;
+        }
+
+        .muted { color: var(--muted); font-size: 0.95rem; }
+        .status { margin-top: 0.5rem; color: var(--muted); }
+        .pill { display:inline-block; padding:2px 10px; border-radius:999px; background:#efe6d8; font-size:0.85rem; }
+        .ok { background:#dcfce7; color:#166534; }
+        .warn { background:#fef3c7; color:#92400e; }
+        .editorScrollArea {
+            max-height: 70vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 10px;
+            margin-top: 0.75rem;
+        }
+        .editorSidebar {
+            max-height: 70vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+    <nav class="site-menu" aria-label="Site">
+        <a href="/">Home</a>
+        <a href="/register.html">Registration</a>
+        <a href="/user.html">User Page</a>
+        <a href="/manage.html">Management Panel</a>
+        <a href="/preemployment.html">Pre-Employment</a>
+        <a href="/api.html">API Tools</a>
+    </nav>
+    <h1>QuizAPI Management Panel</h1>
+    <p class="topnav" style="margin-top: -0.2rem;">Manage quiz imports, users, reports, SMTP, and pre-employment configuration from this panel.</p>
+
+    <form id="loginForm">
+        <h3>Admin Login</h3>
+        <label>Email:</label><br />
+        <input type="email" id="email" placeholder="admin@quizapi.local" required /><br />
+        <label>Password:</label><br />
+        <input type="password" id="password" placeholder="Enter password" required /><br />
+        <button type="submit">Login</button>
+    </form>
+
+    <form id="uploadForm" enctype="multipart/form-data" style="display:none;">
+        <h3>Quiz Package Import (.csv / .txt / .zip)</h3>
+        <input type="file" id="fileInput" name="File" accept=".csv,.txt,.zip" required />
+        <button type="submit">Upload</button>
+        <button type="button" id="logoutBtn" class="danger">Logout</button>
+    </form>
+
+    <div id="fileTable" style="display:none;">
+        <h3>Import Files</h3>
+        <table>
+            <thead>
+                <tr><th>File Name</th><th>Size (KB)</th><th>Uploaded</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="fileList"></tbody>
+        </table>
+    </div>
+
+    <div id="status"></div>
+
+    <!-- OK Keep this div OUTSIDE #status -->
+    <div id="userManager" style="display:none;">
+        <h3>Accounts And Roles</h3>
+        <form id="createUserForm">
+            <input type="text" id="newUserFirstName" placeholder="First name" />
+            <input type="text" id="newUserLastName" placeholder="Last name" />
+            <input type="email" id="newUserEmail" placeholder="New user email" required />
+            <input type="password" id="newUserPassword" placeholder="Password" required />
+            <select id="newUserRole">
+                <option value="User">User</option>
+                <option value="Admin">Admin</option>
+            </select>
+            <button type="submit">Create User</button>
+        </form>
+
+        <div style="margin:12px 0 10px;">
+            <input type="text" id="userSearch" placeholder="Search users by name, email, or role" style="max-width:420px;" />
+        </div>
+
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="userList"></tbody>
+        </table>
+    </div>
+
+    <div id="smtpSettings" style="display:none;">
+        <h3>SMTP Settings</h3>
+        <div class="muted" style="margin-bottom:8px;">Configure SMTP for authenticated relay (username/password) or unauthenticated relay (leave username blank).</div>
+        <form id="smtpForm">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+                <div>
+                    <label>Host</label><br/>
+                    <input type="text" id="smtpHost" placeholder="smtp.example.com" required />
+                </div>
+                <div>
+                    <label>Port</label><br/>
+                    <input type="number" id="smtpPort" min="1" value="25" required style="width:120px;" />
+                </div>
+                <div>
+                    <label>From Email</label><br/>
+                    <input type="email" id="smtpFromEmail" placeholder="noreply@domain.com" required />
+                </div>
+                <div>
+                    <label>From Name</label><br/>
+                    <input type="text" id="smtpFromName" placeholder="QuizAPI" />
+                </div>
+                <div>
+                    <label>Notification Email</label><br/>
+                    <input type="email" id="smtpNotificationEmail" placeholder="hr@domain.com" />
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:flex-end;">
+                <div>
+                    <label>Username (optional)</label><br/>
+                    <input type="text" id="smtpUsername" placeholder="smtp-user@domain.com" />
+                </div>
+                <div>
+                    <label>Password (optional)</label><br/>
+                    <input type="password" id="smtpPassword" placeholder="Leave blank to keep existing" />
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:22px;">
+                    <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="smtpUseStartTls" /> Use STARTTLS</label>
+                    <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="smtpUseSsl" /> Use SSL</label>
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:center;">
+                <button type="submit">Save SMTP</button>
+                <button type="button" id="smtpReloadBtn">Reload</button>
+                <input type="email" id="smtpTestTo" placeholder="Test email recipient" style="min-width:260px;" />
+                <button type="button" id="smtpTestBtn">Send Test</button>
+                <span class="muted" id="smtpStatus"></span>
+            </div>
+        </form>
+    </div>
+
+    <div id="preEmploymentSettings" style="display:none;">
+        <h3>Pre-Employment Quiz Setup</h3>
+        <div class="muted" style="margin-bottom:8px;">Choose one or more imported exam titles and how many random questions to pull from each selected exam. Candidates will run this saved configuration from the pre-employment page.</div>
+        <form id="preEmploymentForm">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+                <div>
+                    <label>Public page title</label><br />
+                    <input type="text" id="preEmploymentTitle" placeholder="Pre-Employment Quiz" style="min-width:260px;" />
+                </div>
+                <div>
+                    <label>Source exam titles</label><br />
+                    <select id="preEmploymentQuizSelect" multiple required size="7" style="min-width:320px; min-height:220px;">
+                    </select>
+                    <div class="muted">Hold `Ctrl` or `Cmd` to select multiple quizzes.</div>
+                </div>
+                <div>
+                    <label>Questions per selected source exam</label><br />
+                    <input type="number" id="preEmploymentQuestionCount" min="1" value="20" required style="width:140px;" />
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:flex-end;">
+                <div>
+                    <label>Time limit (minutes, optional)</label><br />
+                    <input type="number" id="preEmploymentTimeLimit" min="0" value="0" style="width:160px;" />
+                </div>
+                <div>
+                    <label>Passing score %</label><br />
+                    <input type="number" id="preEmploymentPassingScore" min="0" max="100" step="0.01" value="70" style="width:140px;" />
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:22px;">
+                    <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="preEmploymentRandomizeAnswers" checked /> Randomize answers</label>
+                    <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="preEmploymentShowCorrectAnswers" /> Show correct answers at end</label>
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:center;">
+                <button type="submit">Save Pre-Employment Setup</button>
+                <button type="button" id="preEmploymentReloadBtn">Reload</button>
+                <a class="app-link" href="/preemployment.html" target="_blank">Open Pre-Employment Page</a>
+                <span class="muted" id="preEmploymentStatus"></span>
+            </div>
+        </form>
+    </div>
+
+
+    <script>
+const loginForm = document.getElementById("loginForm");
+        const uploadForm = document.getElementById("uploadForm");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const statusBox = document.getElementById("status");
+        const fileTable = document.getElementById("fileTable");
+        const fileList = document.getElementById("fileList");
+        const userManager = document.getElementById("userManager");   // only once
+        const smtpSettings = document.getElementById("smtpSettings");
+        const preEmploymentSettings = document.getElementById("preEmploymentSettings");
+        let quizSection = null;
+        let historySection = null;
+        let reportingSection = null;
+        let submissionSection = null;
+        let questionEditorSection = null;
+        let quizCreatorSection = null;
+        const smtpHost = document.getElementById("smtpHost");
+        const smtpPort = document.getElementById("smtpPort");
+        const smtpFromEmail = document.getElementById("smtpFromEmail");
+        const smtpFromName = document.getElementById("smtpFromName");
+        const smtpNotificationEmail = document.getElementById("smtpNotificationEmail");
+        const smtpUsername = document.getElementById("smtpUsername");
+        const smtpPassword = document.getElementById("smtpPassword");
+        const smtpUseStartTls = document.getElementById("smtpUseStartTls");
+        const smtpUseSsl = document.getElementById("smtpUseSsl");
+        const smtpReloadBtn = document.getElementById("smtpReloadBtn");
+        const smtpTestTo = document.getElementById("smtpTestTo");
+        const smtpTestBtn = document.getElementById("smtpTestBtn");
+        const smtpStatus = document.getElementById("smtpStatus");
+        const smtpForm = document.getElementById("smtpForm");
+        const userList = document.getElementById("userList");
+        const userSearch = document.getElementById("userSearch");
+        const preEmploymentForm = document.getElementById("preEmploymentForm");
+        const preEmploymentTitle = document.getElementById("preEmploymentTitle");
+        const preEmploymentQuizSelect = document.getElementById("preEmploymentQuizSelect");
+        const preEmploymentQuestionCount = document.getElementById("preEmploymentQuestionCount");
+        const preEmploymentTimeLimit = document.getElementById("preEmploymentTimeLimit");
+        const preEmploymentPassingScore = document.getElementById("preEmploymentPassingScore");
+        const preEmploymentRandomizeAnswers = document.getElementById("preEmploymentRandomizeAnswers");
+        const preEmploymentShowCorrectAnswers = document.getElementById("preEmploymentShowCorrectAnswers");
+        const preEmploymentReloadBtn = document.getElementById("preEmploymentReloadBtn");
+        const preEmploymentStatus = document.getElementById("preEmploymentStatus");
+        const includeArchivedQuizzes = document.getElementById("includeArchivedQuizzes");
+        const exportImportHistoryBtn = document.getElementById("exportImportHistoryBtn");
+        const refreshUsageBtn = document.getElementById("refreshUsageBtn");
+        const exportUserActivityBtn = document.getElementById("exportUserActivityBtn");
+        const usageStatus = document.getElementById("usageStatus");
+        const usageSummary = document.getElementById("usageSummary");
+        const usageTbody = document.getElementById("usageTbody");
+        const recentAttemptsTbody = document.getElementById("recentAttemptsTbody");
+        const refreshSubmissionsBtn = document.getElementById("refreshSubmissionsBtn");
+        const submissionStatus = document.getElementById("submissionStatus");
+        const submissionTbody = document.getElementById("submissionTbody");
+
+        let token = localStorage.getItem("jwtToken");
+        let cachedQuizzes = [];
+        let cachedUsers = [];
+        let questionEditorState = {
+            quizId: "",
+            page: 1,
+            pageSize: 10,
+            totalPages: 0
+        };
+        let quizCreatorState = {
+            quizId: "",
+            page: 1,
+            pageSize: 10,
+            totalPages: 0,
+            selectedQuestions: []
+        };
+
+        function escapeHtml(str) {
+            return String(str ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function escapeHtmlAttr(str) {
+            // Same as escapeHtml, but ensure it's safe inside attributes
+            return escapeHtml(str).replace(/`/g, "&#96;");
+        }
+
+        function toCamelKey(key) {
+            if (!key || typeof key !== "string") return key;
+            return key.length === 1 ? key.toLowerCase() : (key[0].toLowerCase() + key.slice(1));
+        }
+
+        function normalizeKeys(value) {
+            if (Array.isArray(value)) {
+                return value.map(normalizeKeys);
+            }
+
+            if (value && typeof value === "object") {
+                const output = {};
+                for (const [key, child] of Object.entries(value)) {
+                    output[toCamelKey(key)] = normalizeKeys(child);
+                }
+                return output;
+            }
+
+            return value;
+        }
+
+        async function readJsonNormalized(res) {
+            const json = await res.json();
+            return normalizeKeys(json);
+        }
+
+        function isZipFileName(name) {
+            return String(name || "").toLowerCase().endsWith(".zip");
+        }
+
+        function syncLateSections() {
+            quizSection ??= document.getElementById("quizSection");
+            historySection ??= document.getElementById("historySection");
+            reportingSection ??= document.getElementById("reportingSection");
+            submissionSection ??= document.getElementById("submissionSection");
+            questionEditorSection ??= document.getElementById("questionEditorSection");
+            quizCreatorSection ??= document.getElementById("quizCreatorSection");
+        }
+
+        function showAdminPanels() {
+            syncLateSections();
+            loginForm.style.display = "none";
+            uploadForm.style.display = "block";
+            fileTable.style.display = "block";
+            userManager.style.display = "block";
+            smtpSettings.style.display = "block";
+            preEmploymentSettings.style.display = "block";
+            if (quizSection) quizSection.style.display = "block";
+            if (questionEditorSection) questionEditorSection.style.display = "block";
+            if (quizCreatorSection) quizCreatorSection.style.display = "block";
+            if (historySection) historySection.style.display = "block";
+            if (reportingSection) reportingSection.style.display = "block";
+            if (submissionSection) submissionSection.style.display = "block";
+        }
+
+        function hideAdminPanels() {
+            syncLateSections();
+            loginForm.style.display = "block";
+            uploadForm.style.display = "none";
+            fileTable.style.display = "none";
+            userManager.style.display = "none";
+            smtpSettings.style.display = "none";
+            preEmploymentSettings.style.display = "none";
+            if (quizSection) quizSection.style.display = "none";
+            if (questionEditorSection) questionEditorSection.style.display = "none";
+            if (quizCreatorSection) quizCreatorSection.style.display = "none";
+            if (historySection) historySection.style.display = "none";
+            if (reportingSection) reportingSection.style.display = "none";
+            if (submissionSection) submissionSection.style.display = "none";
+        }
+
+
+        // Rehydrate session
+        if (token) {
+            statusBox.textContent = "Resuming admin session...";
+        }
+
+        // Login
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            statusBox.textContent = "Logging in...";
+
+            try {
+                const res = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    statusBox.textContent = "Login failed (" + res.status + "): " + (errorText || "Check credentials.");
+                    return;
+                }
+
+                const data = await res.json();
+                token = data.token;
+                localStorage.setItem("jwtToken", token);
+
+                statusBox.textContent = "Login successful.";
+                showAdminPanels();
+                loadFiles();
+                loadSmtpSettings();
+                loadUsers();
+                loadQuizCategories();
+                loadQuizzes();
+                loadImportHistory();
+                loadUsageReport();
+                loadPreEmploymentSubmissions();
+                loadPreEmploymentConfig();
+                loadQuestionEditorPage(questionEditorState.page);
+                loadQuizCreatorPage(quizCreatorState.page);
+                renderQuizCreatorSelectedList();
+            } catch (err) {
+                statusBox.textContent = "Error: " + err.message;
+            }
+        });
+
+        // Upload
+        uploadForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const file = document.getElementById("fileInput").files[0];
+            if (!file) return alert("Select a file first!");
+
+            statusBox.textContent = "Uploading " + file.name + "...";
+
+            const formData = new FormData();
+            formData.append("File", file);
+
+            try {
+                const isZip = isZipFileName(file.name);
+                const endpoint = isZip ? "/api/import/upload-package" : "/api/import/upload";
+                const res = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` },
+                    body: formData
+                });
+
+                const text = await res.text();
+                if (res.ok) {
+                    if (isZip) {
+                        try {
+                            const data = JSON.parse(text);
+                            statusBox.textContent =
+                                "OK Package upload successful.\n" +
+                                "Zip: " + (data.ZipFileName || file.name) + "\n" +
+                                "CSV ready to import: " + (data.CsvFileName || "(not returned)") + "\n" +
+                                "Images saved: " + (data.ImagesSaved ?? 0);
+                        } catch {
+                            statusBox.textContent = "OK Package upload successful:\n" + text;
+                        }
+                    } else {
+                        statusBox.textContent = "OK Upload successful:\n" + text;
+                    }
+                    loadFiles();
+                } else {
+                    statusBox.textContent = "ERROR Upload failed (" + res.status + "): " + text;
+                }
+            } catch (err) {
+                statusBox.textContent = "Error: " + err.message;
+            }
+        });
+
+        // Load files
+        async function loadFiles() {
+            try {
+                const res = await fetch("/api/files", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const files = await res.json();
+                fileList.innerHTML = "";
+                if (!files.length) {
+                    fileList.innerHTML = `<tr><td colspan="4"><i>No files uploaded yet.</i></td></tr>`;
+                    return;
+                }
+                for (const f of files) {
+                    const isZip = isZipFileName(f.FileName);
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                <td>${f.FileName}</td>
+                <td>${f.SizeKb}</td>
+                <td>${new Date(f.UploadedUtc).toLocaleString()}</td>
+                <td>
+                  ${isZip ? '<span class="muted">Package uploaded</span>' : `<button onclick="processFile('${escapeHtmlAttr(f.FileName)}')">Import</button>`}
+                  <button class="danger" onclick="deleteFile('${f.FileName}')">Delete</button>
+                </td>
+              `;
+                    fileList.appendChild(row);
+                }
+            } catch (err) {
+                fileList.innerHTML = `<tr><td colspan="4">Error loading files.</td></tr>`;
+                console.error(err);
+            }
+        }
+
+        // Import to DB
+        async function processFile(name) {
+            if (isZipFileName(name)) {
+                statusBox.textContent = "ZIP packages must be uploaded through the package uploader and then imported using the extracted CSV file.";
+                return;
+            }
+            if (!confirm(`Import ${name} into database?`)) return;
+            statusBox.textContent = `Importing ${name}...`;
+            const res = await fetch(`/api/import/process/${encodeURIComponent(name)}`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const text = await res.text();
+            if (res.ok) {
+                statusBox.textContent = "OK Imported successfully:\n" + text;
+            } else {
+                statusBox.textContent = "ERROR Import failed (" + res.status + "): " + text;
+            }
+        }
+
+        // Delete
+        async function deleteFile(name) {
+            if (!confirm(`Delete ${name}?`)) return;
+            statusBox.textContent = `Deleting ${name}...`;
+            const res = await fetch(`/api/files/${encodeURIComponent(name)}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const text = await res.text();
+            if (res.ok) {
+                statusBox.textContent = "🗑 Deleted: " + text;
+                loadFiles();
+            } else {
+                statusBox.textContent = "ERROR Delete failed (" + res.status + "): " + text;
+            }
+        }
+
+        // User management
+        function renderUsers(users) {
+            const query = (userSearch?.value || "").trim().toLowerCase();
+            const filteredUsers = !query
+                ? users
+                : users.filter(u => {
+                    const haystack = [
+                        u.firstName,
+                        u.lastName,
+                        u.email,
+                        u.userName,
+                        u.role
+                    ].join(" ").toLowerCase();
+                    return haystack.includes(query);
+                });
+
+            userList.innerHTML = "";
+
+            if (!filteredUsers.length) {
+                const row = document.createElement("tr");
+                row.innerHTML = `<td colspan="4" class="muted">No users match the current search.</td>`;
+                userList.appendChild(row);
+                return;
+            }
+
+            for (const u of filteredUsers) {
+                const row = document.createElement("tr");
+                const role = u.role ?? "User";
+                row.innerHTML = `
+                <td>
+                  <input type="text" value="${escapeHtmlAttr(u.firstName || '')}" data-edit="firstName" data-email="${escapeHtmlAttr(u.email)}" placeholder="First name" style="min-width:120px;" />
+                  <input type="text" value="${escapeHtmlAttr(u.lastName || '')}" data-edit="lastName" data-email="${escapeHtmlAttr(u.email)}" placeholder="Last name" style="min-width:120px;" />
+                </td>
+                <td>${escapeHtml(u.email)}</td>
+                <td>
+                  <select data-edit="role" data-email="${escapeHtmlAttr(u.email)}">
+                    <option value="User" ${role === "User" ? "selected" : ""}>User</option>
+                    <option value="Admin" ${role === "Admin" ? "selected" : ""}>Admin</option>
+                  </select>
+                </td>
+                <td>
+                  <button onclick="saveUserInline('${escapeHtmlAttr(u.email)}')">Save</button>
+                  <button onclick="resetPasswordPrompt('${escapeHtmlAttr(u.email)}')">Reset Password</button>
+                  <button class="danger" onclick="deleteUser('${escapeHtmlAttr(u.email)}')">Delete</button>
+                </td>
+              `;
+                userList.appendChild(row);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await fetch("/api/users", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                cachedUsers = await res.json();
+                renderUsers(cachedUsers);
+            } catch (err) { console.error(err); }
+        }
+
+
+        // SMTP settings
+        async function loadSmtpSettings() {
+            if (!token) return;
+            try {
+                smtpStatus.textContent = 'Loading...';
+                const res = await fetch('/api/admin/smtp', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const t = await res.text();
+                    smtpStatus.textContent = 'Failed to load SMTP: ' + t;
+                    return;
+                }
+                const s = await res.json();
+                smtpHost.value = s.host ?? '';
+                smtpPort.value = s.port ?? 25;
+                smtpFromEmail.value = s.fromEmail ?? '';
+                smtpFromName.value = s.fromName ?? '';
+                smtpNotificationEmail.value = s.notificationEmail ?? '';
+                smtpUsername.value = s.username ?? '';
+                smtpPassword.value = ''; // never fill password field
+                smtpUseStartTls.checked = !!s.useStartTls;
+                smtpUseSsl.checked = !!s.useSsl;
+                smtpStatus.textContent = s.passwordSet ? 'Loaded. Password is set.' : 'Loaded. Password is not set.';
+            } catch (err) {
+                console.error(err);
+                smtpStatus.textContent = 'Error loading SMTP (see console).';
+            }
+        }
+
+        async function saveSmtpSettings() {
+            if (!token) return;
+            try {
+                smtpStatus.textContent = 'Saving...';
+                const payload = {
+                    host: smtpHost.value.trim(),
+                    port: parseInt(smtpPort.value || '25', 10),
+                    useStartTls: !!smtpUseStartTls.checked,
+                    useSsl: !!smtpUseSsl.checked,
+                    username: smtpUsername.value.trim(),
+                    password: smtpPassword.value,
+                    keepExistingPasswordWhenBlank: true,
+                    fromEmail: smtpFromEmail.value.trim(),
+                    fromName: smtpFromName.value.trim() || 'QuizAPI',
+                    notificationEmail: smtpNotificationEmail.value.trim()
+                };
+                const res = await fetch('/api/admin/smtp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const t = await res.text();
+                    smtpStatus.textContent = 'Save failed: ' + t;
+                    return;
+                }
+                smtpPassword.value = '';
+                smtpStatus.textContent = 'Saved.';
+                await loadSmtpSettings();
+            } catch (err) {
+                console.error(err);
+                smtpStatus.textContent = 'Error saving SMTP (see console).';
+            }
+        }
+
+        async function testSmtp() {
+            if (!token) return;
+            const to = (smtpTestTo.value || '').trim();
+            if (!to) {
+                smtpStatus.textContent = 'Enter a test recipient email.';
+                return;
+            }
+            try {
+                smtpStatus.textContent = 'Sending test...';
+                const res = await fetch('/api/admin/smtp/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ toEmail: to })
+                });
+                if (!res.ok) {
+                    const t = await res.text();
+                    smtpStatus.textContent = 'Test failed: ' + t;
+                    return;
+                }
+                smtpStatus.textContent = 'Test email sent.';
+            } catch (err) {
+                console.error(err);
+                smtpStatus.textContent = 'Error sending test (see console).';
+            }
+        }
+        // SMTP form wiring
+        if (smtpForm) {
+            smtpForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await saveSmtpSettings();
+            });
+        }
+        if (smtpReloadBtn) smtpReloadBtn.addEventListener('click', loadSmtpSettings);
+        if (smtpTestBtn) smtpTestBtn.addEventListener('click', testSmtp);
+        if (preEmploymentReloadBtn) preEmploymentReloadBtn.addEventListener('click', loadPreEmploymentConfig);
+        if (preEmploymentForm) {
+            preEmploymentForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                await savePreEmploymentConfig();
+            });
+        }
+
+        document.getElementById("createUserForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const firstName = document.getElementById("newUserFirstName").value;
+            const lastName = document.getElementById("newUserLastName").value;
+            const email = document.getElementById("newUserEmail").value;
+            const password = document.getElementById("newUserPassword").value;
+            const role = document.getElementById("newUserRole").value;
+            const res = await fetch("/api/users", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ firstName, lastName, email, password, role })
+            });
+
+        
+
+            const text = await res.text();
+            if (res.ok) {
+                statusBox.textContent = "OK " + text;
+                loadUsers();
+            } else {
+                statusBox.textContent = "ERROR " + text;
+            }
+        });
+
+        async function saveUserInline(email) {
+            const firstName = document.querySelector(`[data-edit="firstName"][data-email="${CSS.escape(email)}"]`)?.value?.trim() || "";
+            const lastName = document.querySelector(`[data-edit="lastName"][data-email="${CSS.escape(email)}"]`)?.value?.trim() || "";
+            const role = document.querySelector(`[data-edit="role"][data-email="${CSS.escape(email)}"]`)?.value || "User";
+
+            const res = await fetch(`/api/users/${encodeURIComponent(email)}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ firstName, lastName, role })
+            });
+
+            const text = await res.text();
+            if (res.ok) {
+                statusBox.textContent = "OK " + text;
+                loadUsers();
+            } else {
+                statusBox.textContent = "ERROR " + text;
+            }
+        }
+
+        async function updateRole(email, role) {
+            const res = await fetch(`/api/users/${encodeURIComponent(email)}/role`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ role })
+            });
+            const text = await res.text();
+            if (res.ok) { statusBox.textContent = "OK " + text; loadUsers(); }
+            else { statusBox.textContent = "ERROR " + text; }
+        }
+
+        async function resetPasswordPrompt(email) {
+            const newPassword = prompt(`Enter a new password for ${email}:`);
+            if (!newPassword) return;
+
+            const res = await fetch(`/api/users/${encodeURIComponent(email)}/reset-password`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ newPassword })
+            });
+
+            const text = await res.text();
+            if (res.ok) {
+                statusBox.textContent = "OK " + text;
+            } else {
+                statusBox.textContent = "ERROR " + text;
+            }
+        }
+
+        async function deleteUser(email) {
+            if (!confirm(`Delete ${email}?`)) return;
+            const res = await fetch(`/api/users/${encodeURIComponent(email)}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const text = await res.text();
+            if (res.ok) { statusBox.textContent = "🗑 " + text; loadUsers(); }
+            else { statusBox.textContent = "ERROR " + text; }
+        }
+
+        if (userSearch) {
+            userSearch.addEventListener("input", () => renderUsers(cachedUsers));
+        }
+
+        // Logout
+        logoutBtn.addEventListener("click", () => {
+            syncLateSections();
+            localStorage.removeItem("jwtToken");
+            token = null;
+            hideAdminPanels();
+            userList.innerHTML = "";
+            statusBox.textContent = "Logged out.";
+        });
+    
+
+        // --- Admin Dashboard: Quizzes + Import History (CSV is source of truth) ---
+function getDashboardEls() {
+    return {
+        refreshQuizzesBtn: document.getElementById("refreshQuizzesBtn"),
+        quizCategoryFilter: document.getElementById("quizCategoryFilter"),
+        includeArchivedQuizzes: document.getElementById("includeArchivedQuizzes"),
+        quizStatus: document.getElementById("quizStatus"),
+        quizTbody: document.getElementById("quizTbody"),
+        questionEditorQuizSelect: document.getElementById("questionEditorQuizSelect"),
+        questionEditorRefreshBtn: document.getElementById("questionEditorRefreshBtn"),
+        questionEditorStatus: document.getElementById("questionEditorStatus"),
+        questionEditorPager: document.getElementById("questionEditorPager"),
+        questionEditorPageInfo: document.getElementById("questionEditorPageInfo"),
+        questionEditorPrevBtn: document.getElementById("questionEditorPrevBtn"),
+        questionEditorNextBtn: document.getElementById("questionEditorNextBtn"),
+        questionEditorTbody: document.getElementById("questionEditorTbody"),
+        quizCreatorQuizSelect: document.getElementById("quizCreatorQuizSelect"),
+        quizCreatorRefreshBtn: document.getElementById("quizCreatorRefreshBtn"),
+        quizCreatorStatus: document.getElementById("quizCreatorStatus"),
+        quizCreatorTbody: document.getElementById("quizCreatorTbody"),
+        quizCreatorPager: document.getElementById("quizCreatorPager"),
+        quizCreatorPageInfo: document.getElementById("quizCreatorPageInfo"),
+        quizCreatorPrevBtn: document.getElementById("quizCreatorPrevBtn"),
+        quizCreatorNextBtn: document.getElementById("quizCreatorNextBtn"),
+        quizCreatorSelectedList: document.getElementById("quizCreatorSelectedList"),
+        quizCreatorSelectedCount: document.getElementById("quizCreatorSelectedCount"),
+        quizCreatorTitle: document.getElementById("quizCreatorTitle"),
+        quizCreatorCategory: document.getElementById("quizCreatorCategory"),
+        quizCreatorPassThreshold: document.getElementById("quizCreatorPassThreshold"),
+        quizCreatorSaveBtn: document.getElementById("quizCreatorSaveBtn"),
+        refreshHistoryBtn: document.getElementById("refreshHistoryBtn"),
+        exportImportHistoryBtn: document.getElementById("exportImportHistoryBtn"),
+        historyStatus: document.getElementById("historyStatus"),
+        historyTbody: document.getElementById("historyTbody"),
+        refreshUsageBtn: document.getElementById("refreshUsageBtn"),
+        exportUserActivityBtn: document.getElementById("exportUserActivityBtn"),
+        usageStatus: document.getElementById("usageStatus"),
+        usageSummary: document.getElementById("usageSummary"),
+        usageTbody: document.getElementById("usageTbody"),
+        recentAttemptsTbody: document.getElementById("recentAttemptsTbody"),
+        refreshSubmissionsBtn: document.getElementById("refreshSubmissionsBtn"),
+        submissionStatus: document.getElementById("submissionStatus"),
+        submissionTbody: document.getElementById("submissionTbody")
+    };
+}
+
+function formatUtc(dtString) {
+    if (!dtString) return "";
+    try {
+        const d = new Date(dtString);
+        if (isNaN(d.getTime())) return dtString;
+        return d.toISOString().replace("T", " ").replace("Z", " UTC");
+    } catch {
+        return dtString;
+    }
+}
+
+async function loadQuizCategories() {
+    const els = getDashboardEls();
+    if (!els.quizCategoryFilter) return;
+
+    els.quizCategoryFilter.innerHTML = '<option value="All">All</option>';
+
+    try {
+        const res = await fetch("/api/categories", {
+            headers: token ? { "Authorization": "Bearer " + token } : {}
+        });
+
+        if (!res.ok) return;
+
+        const cats = await res.json();
+        if (!Array.isArray(cats)) return;
+
+        for (const c of cats) {
+            if (!c || typeof c !== "string") continue;
+            const val = c;
+            if (val.toLowerCase() === "all") continue;
+
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.textContent = val;
+            els.quizCategoryFilter.appendChild(opt);
+        }
+    } catch { }
+}
+
+async function loadQuizzes() {
+    const { quizStatus, quizTbody, includeArchivedQuizzes } = getDashboardEls();
+    if (!quizStatus || !quizTbody) return;
+
+    if (!token) {
+        quizStatus.textContent = "Login required.";
+        return;
+    }
+
+    quizStatus.textContent = "Loading quizzes...";
+    quizTbody.innerHTML = "";
+
+    try {
+        const cat = (document.getElementById("quizCategoryFilter")?.value) || "All";
+        const params = new URLSearchParams();
+        if (cat && cat !== "All") params.set("category", cat);
+        if (includeArchivedQuizzes?.checked) params.set("includeArchived", "true");
+        const url = "/api/quiz" + (params.toString() ? ("?" + params.toString()) : "");
+
+        const res = await fetch(url, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (!res.ok) {
+            quizStatus.textContent = "Failed to load quizzes: " + res.status;
+            return;
+        }
+
+        const quizzes = await readJsonNormalized(res);
+        cachedQuizzes = Array.isArray(quizzes) ? quizzes : [];
+        populatePreEmploymentQuizOptions(cachedQuizzes);
+        populateQuestionEditorQuizOptions(cachedQuizzes);
+        populateQuizCreatorQuizOptions(cachedQuizzes);
+
+        if (!Array.isArray(quizzes) || quizzes.length === 0) {
+            quizStatus.textContent = "No quizzes found in database.";
+            return;
+        }
+
+        quizStatus.textContent = "Loaded " + quizzes.length + " quiz(es).";
+
+        for (const q of quizzes) {
+            const id = q.Id || q.id || "";
+            const title = q.Title || q.title || "(untitled)";
+            const category = q.Category || q.category || "Uncategorized";
+            const isArchived = !!(q.IsArchived ?? q.isArchived);
+            const created = q.CreatedUtc || q.createdUtc;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(title)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(category)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${isArchived ? '<span class="pill warn">Archived</span>' : '<span class="pill ok">Active</span>'}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee; font-family:monospace;">${escapeHtml(id)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(created))}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee; white-space:nowrap;">
+                    <button type="button" data-action="copy" data-id="${escapeHtmlAttr(id)}">Copy ID</button>
+                    <button type="button" data-action="open" data-id="${escapeHtmlAttr(id)}">Open runner</button>
+                    <button type="button" data-action="${isArchived ? "restore" : "archive"}" data-id="${escapeHtmlAttr(id)}">${isArchived ? "Restore" : "Archive"}</button>
+                    <button type="button" data-action="delete" data-id="${escapeHtmlAttr(id)}" class="danger">Delete</button>
+                </td>
+            `;
+            quizTbody.appendChild(tr);
+        }
+    } catch (err) {
+        quizStatus.textContent = "Error loading quizzes: " + err.message;
+        cachedQuizzes = [];
+        populatePreEmploymentQuizOptions([]);
+        populateQuestionEditorQuizOptions([]);
+        populateQuizCreatorQuizOptions([]);
+    }
+}
+
+async function downloadAuthorizedFile(url, fileName) {
+    const res = await fetch(url, {
+        headers: { "Authorization": "Bearer " + token }
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || ("Request failed: " + res.status));
+    }
+
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
+}
+
+function populatePreEmploymentQuizOptions(quizzes) {
+    if (!preEmploymentQuizSelect) return;
+
+    const previousValues = Array.from(preEmploymentQuizSelect.selectedOptions).map(o => o.value);
+    preEmploymentQuizSelect.innerHTML = '';
+
+    for (const q of (quizzes || [])) {
+        const id = q.Id || q.id || "";
+        const title = q.Title || q.title || "(untitled)";
+        if (!id) continue;
+
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = title;
+        preEmploymentQuizSelect.appendChild(opt);
+    }
+
+    for (const opt of Array.from(preEmploymentQuizSelect.options)) {
+        opt.selected = previousValues.includes(opt.value);
+    }
+}
+
+function populateQuestionEditorQuizOptions(quizzes) {
+    const { questionEditorQuizSelect } = getDashboardEls();
+    if (!questionEditorQuizSelect) return;
+
+    const previousValue = questionEditorState.quizId || questionEditorQuizSelect.value || "";
+    questionEditorQuizSelect.innerHTML = '<option value="">Select a quiz to edit</option>';
+
+    for (const q of (quizzes || [])) {
+        const id = q.Id || q.id || "";
+        const title = q.Title || q.title || "(untitled)";
+        const count = Number(q.QuestionCount ?? q.questionCount ?? 0);
+        if (!id) continue;
+
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = `${title} (${count} questions)`;
+        questionEditorQuizSelect.appendChild(opt);
+    }
+
+    questionEditorQuizSelect.value = previousValue && Array.from(questionEditorQuizSelect.options).some(o => o.value === previousValue)
+        ? previousValue
+        : "";
+}
+
+function populateQuizCreatorQuizOptions(quizzes) {
+    const { quizCreatorQuizSelect } = getDashboardEls();
+    if (!quizCreatorQuizSelect) return;
+
+    const previousValue = quizCreatorState.quizId || quizCreatorQuizSelect.value || "";
+    quizCreatorQuizSelect.innerHTML = '<option value="">Select a Basic quiz</option>';
+
+    const sourceQuizzes = (quizzes || [])
+        .filter(q => String(q.title || "").toLowerCase().includes("basic"))
+        .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+
+    for (const q of sourceQuizzes) {
+        const id = q.id || "";
+        const title = q.title || "(untitled)";
+        const count = Number(q.questionCount ?? 0);
+        if (!id) continue;
+
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = `${title} (${count} Questions)`;
+        quizCreatorQuizSelect.appendChild(opt);
+    }
+
+    quizCreatorQuizSelect.value = previousValue && Array.from(quizCreatorQuizSelect.options).some(o => o.value === previousValue)
+        ? previousValue
+        : "";
+}
+
+function renderQuizCreatorSelectedList() {
+    const { quizCreatorSelectedList, quizCreatorSelectedCount } = getDashboardEls();
+    if (!quizCreatorSelectedList || !quizCreatorSelectedCount) return;
+
+    quizCreatorSelectedList.innerHTML = "";
+    quizCreatorSelectedCount.textContent = `${quizCreatorState.selectedQuestions.length} selected`;
+
+    if (!quizCreatorState.selectedQuestions.length) {
+        quizCreatorSelectedList.innerHTML = '<div class="muted">No questions selected yet.</div>';
+        return;
+    }
+
+    for (const item of quizCreatorState.selectedQuestions) {
+        const row = document.createElement("div");
+        row.style.padding = "10px 0";
+        row.style.borderBottom = "1px solid #eee";
+        row.innerHTML = `
+            <div><strong>${escapeHtml(item.quizTitle || "")}</strong></div>
+            <div class="muted" style="margin-top:4px;">${escapeHtml(item.questionText || "")}</div>
+            <button type="button" data-action="remove-selected-question" data-question-id="${escapeHtmlAttr(item.questionId || "")}" style="margin-top:8px;">Remove</button>
+        `;
+        quizCreatorSelectedList.appendChild(row);
+    }
+}
+
+function renderQuizCreatorQuestionTable(pageData) {
+    const {
+        quizCreatorTbody,
+        quizCreatorStatus,
+        quizCreatorPager,
+        quizCreatorPageInfo,
+        quizCreatorPrevBtn,
+        quizCreatorNextBtn
+    } = getDashboardEls();
+
+    if (!quizCreatorTbody || !quizCreatorStatus || !quizCreatorPager || !quizCreatorPageInfo || !quizCreatorPrevBtn || !quizCreatorNextBtn) {
+        return;
+    }
+
+    quizCreatorTbody.innerHTML = "";
+
+    const items = Array.isArray(pageData.items) ? pageData.items : [];
+    quizCreatorState.totalPages = Number(pageData.totalPages ?? 0);
+    quizCreatorState.page = Number(pageData.page ?? 1);
+
+    if (!items.length) {
+        quizCreatorStatus.textContent = "No source questions found for this quiz.";
+        quizCreatorPager.style.display = "none";
+        return;
+    }
+
+    quizCreatorStatus.textContent = `Loaded ${items.length} source question(s) on page ${quizCreatorState.page} of ${quizCreatorState.totalPages || 1}.`;
+    quizCreatorPager.style.display = "flex";
+    quizCreatorPageInfo.textContent = `Page ${quizCreatorState.page} of ${quizCreatorState.totalPages || 1}`;
+    quizCreatorPrevBtn.disabled = quizCreatorState.page <= 1;
+    quizCreatorNextBtn.disabled = quizCreatorState.totalPages <= 0 || quizCreatorState.page >= quizCreatorState.totalPages;
+
+    for (const item of items) {
+        const questionId = item.questionId || "";
+        const quizTitle = item.quizTitle || "";
+        const questionText = item.questionText || "";
+        const answers = Array.isArray(item.answers) ? item.answers : [];
+        const alreadySelected = quizCreatorState.selectedQuestions.some(q => q.questionId === questionId);
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="padding:12px 6px; border-bottom:1px solid #eee; vertical-align:top;">
+                <div><strong>${escapeHtml(quizTitle)}</strong></div>
+                <div style="margin-top:6px;">${escapeHtml(questionText)}</div>
+                <div class="muted" style="margin-top:8px;">${answers.map(a => `${a.isCorrect ? "[Correct]" : "[Answer]"} ${escapeHtml(a.answerText || "")}`).join("<br />")}</div>
+                <button type="button" data-action="add-source-question" data-question-id="${escapeHtmlAttr(questionId)}" data-quiz-title="${escapeHtmlAttr(quizTitle)}" data-question-text="${escapeHtmlAttr(questionText)}" style="margin-top:10px;" ${alreadySelected ? "disabled" : ""}>${alreadySelected ? "Added" : "Add question"}</button>
+            </td>
+        `;
+        quizCreatorTbody.appendChild(tr);
+    }
+}
+
+async function loadQuizCreatorPage(page = 1) {
+    const { quizCreatorQuizSelect, quizCreatorStatus, quizCreatorTbody, quizCreatorPager } = getDashboardEls();
+    if (!quizCreatorQuizSelect || !quizCreatorStatus || !quizCreatorTbody || !quizCreatorPager) return;
+
+    quizCreatorState.quizId = quizCreatorQuizSelect.value || "";
+    quizCreatorState.page = page;
+
+    if (!token) {
+        quizCreatorStatus.textContent = "Login required.";
+        return;
+    }
+
+    if (!quizCreatorState.quizId) {
+        quizCreatorTbody.innerHTML = "";
+        quizCreatorPager.style.display = "none";
+        quizCreatorStatus.textContent = "Choose a Basic quiz to load source questions.";
+        return;
+    }
+
+    quizCreatorStatus.textContent = "Loading source questions...";
+    quizCreatorTbody.innerHTML = "";
+    quizCreatorPager.style.display = "none";
+
+    try {
+        const params = new URLSearchParams({
+            quizId: quizCreatorState.quizId,
+            page: String(page),
+            pageSize: String(quizCreatorState.pageSize)
+        });
+
+        const res = await fetch("/api/admin/quiz-creator/source-questions?" + params.toString(), {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            quizCreatorStatus.textContent = "Failed to load source questions: " + (text || res.status);
+            return;
+        }
+
+        const pageData = await readJsonNormalized(res);
+        renderQuizCreatorQuestionTable(pageData);
+    } catch (err) {
+        quizCreatorStatus.textContent = "Error loading source questions: " + err.message;
+    }
+}
+
+async function createQuizFromSelectedQuestions() {
+    const {
+        quizCreatorTitle,
+        quizCreatorCategory,
+        quizCreatorPassThreshold,
+        quizCreatorSaveBtn,
+        quizCreatorStatus
+    } = getDashboardEls();
+
+    if (!quizCreatorTitle || !quizCreatorCategory || !quizCreatorPassThreshold || !quizCreatorSaveBtn || !quizCreatorStatus) return;
+
+    const title = (quizCreatorTitle.value || "").trim();
+    if (!title) {
+        quizCreatorStatus.textContent = "Enter a title for the new quiz.";
+        return;
+    }
+
+    if (!quizCreatorState.selectedQuestions.length) {
+        quizCreatorStatus.textContent = "Add at least one question before creating a quiz.";
+        return;
+    }
+
+    quizCreatorSaveBtn.disabled = true;
+    quizCreatorStatus.textContent = "Creating quiz...";
+
+    try {
+        const res = await fetch("/api/admin/quiz-creator/create", {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                title,
+                category: (quizCreatorCategory.value || "").trim(),
+                passThresholdPercent: Number(quizCreatorPassThreshold.value || 70),
+                questionIds: quizCreatorState.selectedQuestions.map(q => q.questionId)
+            })
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            quizCreatorStatus.textContent = "Create failed: " + (text || res.status);
+            return;
+        }
+
+        const created = await readJsonNormalized(res);
+        quizCreatorStatus.textContent = `Created quiz "${created.title || title}" with ${created.questionCount ?? quizCreatorState.selectedQuestions.length} question(s).`;
+        quizCreatorState.selectedQuestions = [];
+        renderQuizCreatorSelectedList();
+        await loadQuizzes();
+        await loadQuizCreatorPage(quizCreatorState.page);
+    } catch (err) {
+        quizCreatorStatus.textContent = "Error creating quiz: " + err.message;
+    } finally {
+        quizCreatorSaveBtn.disabled = false;
+    }
+}
+
+function renderQuestionEditorTable(pageData) {
+    const {
+        questionEditorTbody,
+        questionEditorStatus,
+        questionEditorPager,
+        questionEditorPageInfo,
+        questionEditorPrevBtn,
+        questionEditorNextBtn
+    } = getDashboardEls();
+
+    if (!questionEditorTbody || !questionEditorStatus || !questionEditorPager || !questionEditorPageInfo || !questionEditorPrevBtn || !questionEditorNextBtn) {
+        return;
+    }
+
+    questionEditorTbody.innerHTML = "";
+
+    const items = Array.isArray(pageData.items) ? pageData.items : [];
+    questionEditorState.totalPages = Number(pageData.totalPages ?? 0);
+    questionEditorState.page = Number(pageData.page ?? 1);
+
+    if (!items.length) {
+        questionEditorStatus.textContent = "No questions found for this quiz.";
+        questionEditorPager.style.display = "none";
+        return;
+    }
+
+    questionEditorStatus.textContent = `Loaded ${items.length} question(s) on page ${questionEditorState.page} of ${questionEditorState.totalPages || 1}.`;
+    questionEditorPager.style.display = "flex";
+    questionEditorPageInfo.textContent = `Page ${questionEditorState.page} of ${questionEditorState.totalPages || 1}`;
+    questionEditorPrevBtn.disabled = questionEditorState.page <= 1;
+    questionEditorNextBtn.disabled = questionEditorState.totalPages <= 0 || questionEditorState.page >= questionEditorState.totalPages;
+
+    for (const item of items) {
+        const questionId = item.questionId || "";
+        const questionText = item.questionText || "";
+        const questionImgKey = item.questionImgKey || "";
+        const answers = Array.isArray(item.answers) ? item.answers : [];
+
+        const answersHtml = answers.map(answer => {
+            const answerId = answer.id || "";
+            const answerText = answer.answerText || "";
+            const isCorrect = !!answer.isCorrect;
+            return `
+            <div style="display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px; align-items:center; margin-top:8px;">
+                <input type="text" data-role="answer-text" data-answer-id="${escapeHtmlAttr(answerId)}" value="${escapeHtmlAttr(answerText)}" />
+                <label style="display:flex; gap:6px; align-items:center; white-space:nowrap;">
+                    <input type="checkbox" data-role="answer-correct" data-answer-id="${escapeHtmlAttr(answerId)}" ${isCorrect ? "checked" : ""} />
+                    Correct
+                </label>
+            </div>
+        `;
+        }).join("");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="padding:12px 6px; border-bottom:1px solid #eee; vertical-align:top;">
+                <div class="muted" style="margin-bottom:6px;">Question ID: <span style="font-family:monospace;">${escapeHtml(questionId)}</span></div>
+                <label class="muted">QuestionText</label>
+                <textarea data-role="question-text" rows="5">${escapeHtml(questionText)}</textarea>
+                <label class="muted" style="display:block; margin-top:10px;">QuestionImgKey</label>
+                <input type="text" data-role="question-img-key" value="${escapeHtmlAttr(questionImgKey)}" placeholder="image-file-name.png" />
+                <div class="muted" style="margin-top:8px;">Answers</div>
+                ${answersHtml}
+                <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" data-action="save-question" data-question-id="${escapeHtmlAttr(questionId)}">Save question</button>
+                    <span class="muted" data-role="save-status"></span>
+                </div>
+            </td>
+        `;
+        questionEditorTbody.appendChild(tr);
+    }
+}
+
+async function loadQuestionEditorPage(page = 1) {
+    const { questionEditorQuizSelect, questionEditorStatus, questionEditorTbody, questionEditorPager } = getDashboardEls();
+    if (!questionEditorQuizSelect || !questionEditorStatus || !questionEditorTbody || !questionEditorPager) return;
+
+    questionEditorState.quizId = questionEditorQuizSelect.value || "";
+    questionEditorState.page = page;
+
+    if (!token) {
+        questionEditorStatus.textContent = "Login required.";
+        return;
+    }
+
+    if (!questionEditorState.quizId) {
+        questionEditorTbody.innerHTML = "";
+        questionEditorPager.style.display = "none";
+        questionEditorStatus.textContent = "Choose a quiz to begin editing questions.";
+        return;
+    }
+
+    questionEditorStatus.textContent = "Loading question editor...";
+    questionEditorTbody.innerHTML = "";
+    questionEditorPager.style.display = "none";
+
+    try {
+        const params = new URLSearchParams({
+            quizId: questionEditorState.quizId,
+            page: String(page),
+            pageSize: String(questionEditorState.pageSize)
+        });
+
+        const res = await fetch("/api/admin/question-editor?" + params.toString(), {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            questionEditorStatus.textContent = "Failed to load question editor: " + (text || res.status);
+            return;
+        }
+
+        const pageData = await readJsonNormalized(res);
+        renderQuestionEditorTable(pageData);
+    } catch (err) {
+        questionEditorStatus.textContent = "Error loading question editor: " + err.message;
+    }
+}
+
+async function saveQuestionEditorRow(button) {
+    const tr = button.closest("tr");
+    if (!tr) return;
+
+    const questionId = button.getAttribute("data-question-id");
+    const statusEl = tr.querySelector('[data-role="save-status"]');
+    const questionText = tr.querySelector('[data-role="question-text"]')?.value || "";
+    const questionImgKey = tr.querySelector('[data-role="question-img-key"]')?.value || "";
+    const answerTextInputs = Array.from(tr.querySelectorAll('[data-role="answer-text"]'));
+    const answerCorrectInputs = Array.from(tr.querySelectorAll('[data-role="answer-correct"]'));
+
+    const answers = answerTextInputs.map(input => {
+        const answerId = input.getAttribute("data-answer-id") || "";
+        const correctCheckbox = answerCorrectInputs.find(cb => cb.getAttribute("data-answer-id") === answerId);
+        return {
+            id: answerId,
+            answerText: input.value,
+            isCorrect: !!correctCheckbox?.checked
+        };
+    });
+
+    if (!questionId) return;
+
+    if (statusEl) statusEl.textContent = "Saving...";
+    button.disabled = true;
+
+    try {
+        const res = await fetch("/api/admin/question-editor/" + encodeURIComponent(questionId), {
+            method: "PUT",
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                questionText,
+                questionImgKey,
+                answers
+            })
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            if (statusEl) statusEl.textContent = "Save failed: " + (text || res.status);
+            return;
+        }
+
+        if (statusEl) statusEl.textContent = "Saved.";
+    } catch (err) {
+        if (statusEl) statusEl.textContent = "Error saving question: " + err.message;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+async function loadPreEmploymentConfig() {
+    if (!token) return;
+
+    try {
+        preEmploymentStatus.textContent = "Loading...";
+
+        if (!cachedQuizzes.length) {
+            await loadQuizzes();
+        }
+
+        const res = await fetch("/api/preemployment/config", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+            preEmploymentStatus.textContent = "Failed to load pre-employment setup.";
+            return;
+        }
+
+        const cfg = await res.json();
+        preEmploymentTitle.value = cfg.title || "Pre-Employment Quiz";
+        preEmploymentQuestionCount.value = cfg.questionCount || 20;
+        preEmploymentTimeLimit.value = cfg.timeLimitMinutes || 0;
+        preEmploymentPassingScore.value = cfg.passingScorePercent ?? 70;
+        preEmploymentRandomizeAnswers.checked = cfg.randomizeAnswers !== false;
+        preEmploymentShowCorrectAnswers.checked = !!cfg.showCorrectAnswersAtEnd;
+
+        const selectedIds = Array.isArray(cfg.quizIds)
+            ? cfg.quizIds.map(x => String(x))
+            : (cfg.quizId ? [String(cfg.quizId)] : []);
+        for (const opt of Array.from(preEmploymentQuizSelect.options)) {
+            opt.selected = selectedIds.includes(opt.value);
+        }
+
+        const selectedTitles = Array.isArray(cfg.quizTitles) && cfg.quizTitles.length
+            ? cfg.quizTitles
+            : (cfg.quizTitle ? [cfg.quizTitle] : []);
+
+        const loadedCount = Number(cfg.questionCount || 20);
+        const loadedTotal = selectedTitles.length ? loadedCount * selectedTitles.length : loadedCount;
+        preEmploymentStatus.textContent = selectedTitles.length
+            ? `Loaded. Current source exams: ${selectedTitles.join(", ")}. Saved count is ${loadedCount} per exam (${loadedTotal} total).`
+            : "Loaded. Select at least one source exam and save.";
+    } catch (err) {
+        console.error(err);
+        preEmploymentStatus.textContent = "Error loading pre-employment setup.";
+    }
+}
+
+async function savePreEmploymentConfig() {
+    if (!token) return;
+
+    const quizIds = Array.from(preEmploymentQuizSelect.selectedOptions).map(o => o.value);
+    if (!quizIds.length) {
+        preEmploymentStatus.textContent = "Choose at least one source exam title first.";
+        return;
+    }
+
+    const payload = {
+        title: (preEmploymentTitle.value || "").trim(),
+        quizIds,
+        questionCount: parseInt(preEmploymentQuestionCount.value || "0", 10),
+        timeLimitMinutes: parseInt(preEmploymentTimeLimit.value || "0", 10),
+        passingScorePercent: parseFloat(preEmploymentPassingScore.value || "0"),
+        randomizeAnswers: !!preEmploymentRandomizeAnswers.checked,
+        showCorrectAnswersAtEnd: !!preEmploymentShowCorrectAnswers.checked
+    };
+
+    try {
+        preEmploymentStatus.textContent = "Saving...";
+
+        const res = await fetch("/api/preemployment/config", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            preEmploymentStatus.textContent = "Save failed: " + text;
+            return;
+        }
+
+        const saved = await res.json();
+        preEmploymentQuestionCount.value = saved.questionCount || payload.questionCount;
+        const savedTitles = Array.isArray(saved.quizTitles) && saved.quizTitles.length
+            ? saved.quizTitles
+            : (saved.quizTitle ? [saved.quizTitle] : []);
+        const savedPerQuizCount = Number(saved.questionCount || payload.questionCount || 0);
+        const savedTotal = savedTitles.length ? savedPerQuizCount * savedTitles.length : savedPerQuizCount;
+        preEmploymentStatus.textContent = savedTitles.length
+            ? `Saved. Pre-employment quiz now pulls ${savedPerQuizCount} random question(s) from each selected exam in ${savedTitles.join(", ")} (${savedTotal} total).`
+            : "Saved.";
+    } catch (err) {
+        console.error(err);
+        preEmploymentStatus.textContent = "Error saving pre-employment setup.";
+    }
+}
+
+async function loadImportHistory() {
+    const { historyStatus, historyTbody } = getDashboardEls();
+    if (!historyStatus || !historyTbody) return;
+
+    if (!token) {
+        historyStatus.textContent = "Login required.";
+        return;
+    }
+
+    historyStatus.textContent = "Loading import history...";
+    historyTbody.innerHTML = "";
+
+    try {
+        const res = await fetch("/api/import/history?take=5", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (!res.ok) {
+            historyStatus.textContent = "Failed to load import history: " + res.status;
+            return;
+        }
+
+        const runs = await res.json();
+
+        if (!Array.isArray(runs) || runs.length === 0) {
+            historyStatus.textContent = "No import history yet.";
+            return;
+        }
+
+        historyStatus.textContent = "Loaded " + runs.length + " run(s).";
+
+        for (const r of runs) {
+            const imported = r.ImportedUtc || r.importedUtc;
+            const file = r.FileName || r.fileName || "";
+            const status = r.Status || r.status || "";
+            const message = r.Message || r.message || "";
+            const rows = (r.Rows ?? r.rows ?? "");
+            const quizzes = (r.Quizzes ?? r.quizzes ?? "");
+            const questions = (r.Questions ?? r.questions ?? "");
+            const answers = (r.Answers ?? r.answers ?? "");
+
+            const counts = `rows=${rows}, quizzes=${quizzes}, questions=${questions}, answers=${answers}`;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(imported))}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(file)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(status)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee; font-family:monospace;">${escapeHtml(counts)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(message)}</td>
+            `;
+            historyTbody.appendChild(tr);
+        }
+    } catch (err) {
+        historyStatus.textContent = "Error loading import history: " + err.message;
+    }
+}
+
+async function loadUsageReport() {
+    const { usageStatus, usageSummary, usageTbody, recentAttemptsTbody } = getDashboardEls();
+    if (!usageStatus || !usageTbody || !recentAttemptsTbody) return;
+    if (!token) {
+        usageStatus.textContent = "Login required.";
+        return;
+    }
+
+    usageStatus.textContent = "Loading usage report...";
+    usageSummary.textContent = "";
+    usageTbody.innerHTML = "";
+    recentAttemptsTbody.innerHTML = "";
+
+    try {
+        const res = await fetch("/api/admin/reports/quiz-usage", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (!res.ok) {
+            usageStatus.textContent = "Failed to load usage report: " + res.status;
+            return;
+        }
+
+        const data = await res.json();
+        const usageRows = Array.isArray(data.mostTakenQuizzes || data.MostTakenQuizzes) ? (data.mostTakenQuizzes || data.MostTakenQuizzes) : [];
+        const recentRows = Array.isArray(data.recentAttempts || data.RecentAttempts) ? (data.recentAttempts || data.RecentAttempts) : [];
+        usageSummary.textContent = `Total attempts: ${data.totalAttempts ?? data.TotalAttempts ?? 0} | Unique users: ${data.uniqueUsers ?? data.UniqueUsers ?? 0}`;
+        usageStatus.textContent = usageRows.length ? "Usage report loaded." : "No quiz attempts recorded yet.";
+
+        for (const item of usageRows) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.quizTitle || item.QuizTitle || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.quizCategory || item.QuizCategory || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.attemptCount ?? item.AttemptCount ?? 0)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.averageScorePercent ?? item.AverageScorePercent ?? 0)}%</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(item.lastAttemptUtc || item.LastAttemptUtc))}</td>
+            `;
+            usageTbody.appendChild(tr);
+        }
+
+        for (const row of recentRows) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.userName || row.UserName || "(not set)")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.userEmail || row.UserEmail || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.quizTitle || row.QuizTitle || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.scorePercent ?? row.ScorePercent ?? 0)}% (${escapeHtml(row.correctCount ?? row.CorrectCount ?? 0)} / ${escapeHtml(row.totalQuestions ?? row.TotalQuestions ?? 0)})</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(row.submittedUtc || row.SubmittedUtc))}</td>
+            `;
+            recentAttemptsTbody.appendChild(tr);
+        }
+    } catch (err) {
+        usageStatus.textContent = "Error loading usage report: " + err.message;
+    }
+}
+
+async function loadPreEmploymentSubmissions() {
+    const { submissionStatus, submissionTbody } = getDashboardEls();
+    if (!submissionStatus || !submissionTbody) return;
+    if (!token) {
+        submissionStatus.textContent = "Login required.";
+        return;
+    }
+
+    submissionStatus.textContent = "Loading submissions...";
+    submissionTbody.innerHTML = "";
+
+    try {
+        const res = await fetch("/api/preemployment/submissions?take=100", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (!res.ok) {
+            submissionStatus.textContent = "Failed to load submissions: " + res.status;
+            return;
+        }
+
+        const rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) {
+            submissionStatus.textContent = "No pre-employment submissions yet.";
+            return;
+        }
+
+        submissionStatus.textContent = `Loaded ${rows.length} submission(s).`;
+        for (const row of rows) {
+            const candidate = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || "(not provided)";
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(candidate)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.quizTitle || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.sourceQuizTitles || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.scorePercent || 0)}% (${escapeHtml(row.correctCount || 0)} / ${escapeHtml(row.totalQuestions || 0)})<br /><span class="muted">${escapeHtml(row.passed ? "Passed" : "Did not meet threshold")} at ${escapeHtml(row.passingScorePercent || 0)}%</span></td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(row.submittedUtc))}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;"><button type="button" data-submission="${encodeURIComponent(JSON.stringify(row))}">Print summary</button></td>
+            `;
+            submissionTbody.appendChild(tr);
+        }
+    } catch (err) {
+        submissionStatus.textContent = "Error loading submissions: " + err.message;
+    }
+}
+
+function wireDashboardButtonsOnce() {
+    const {
+        refreshQuizzesBtn,
+        questionEditorQuizSelect,
+        questionEditorRefreshBtn,
+        questionEditorPrevBtn,
+        questionEditorNextBtn,
+        questionEditorTbody,
+        quizCreatorQuizSelect,
+        quizCreatorRefreshBtn,
+        quizCreatorPrevBtn,
+        quizCreatorNextBtn,
+        quizCreatorTbody,
+        quizCreatorSelectedList,
+        quizCreatorSaveBtn,
+        refreshHistoryBtn,
+        exportImportHistoryBtn,
+        refreshUsageBtn,
+        exportUserActivityBtn,
+        refreshSubmissionsBtn,
+        includeArchivedQuizzes,
+        quizTbody
+    } = getDashboardEls();
+
+    if (refreshQuizzesBtn && !refreshQuizzesBtn.dataset.wired) {
+        refreshQuizzesBtn.dataset.wired = "1";
+        refreshQuizzesBtn.addEventListener("click", () => loadQuizzes());
+    }
+
+    if (questionEditorQuizSelect && !questionEditorQuizSelect.dataset.wired) {
+        questionEditorQuizSelect.dataset.wired = "1";
+        questionEditorQuizSelect.addEventListener("change", () => loadQuestionEditorPage(1));
+    }
+
+    if (questionEditorRefreshBtn && !questionEditorRefreshBtn.dataset.wired) {
+        questionEditorRefreshBtn.dataset.wired = "1";
+        questionEditorRefreshBtn.addEventListener("click", () => loadQuestionEditorPage(questionEditorState.page || 1));
+    }
+
+    if (questionEditorPrevBtn && !questionEditorPrevBtn.dataset.wired) {
+        questionEditorPrevBtn.dataset.wired = "1";
+        questionEditorPrevBtn.addEventListener("click", () => {
+            if (questionEditorState.page > 1) {
+                loadQuestionEditorPage(questionEditorState.page - 1);
+            }
+        });
+    }
+
+    if (questionEditorNextBtn && !questionEditorNextBtn.dataset.wired) {
+        questionEditorNextBtn.dataset.wired = "1";
+        questionEditorNextBtn.addEventListener("click", () => {
+            if (questionEditorState.totalPages > questionEditorState.page) {
+                loadQuestionEditorPage(questionEditorState.page + 1);
+            }
+        });
+    }
+
+    if (questionEditorTbody && !questionEditorTbody.dataset.wired) {
+        questionEditorTbody.dataset.wired = "1";
+        questionEditorTbody.addEventListener("click", async (e) => {
+            const btn = e.target.closest('button[data-action="save-question"]');
+            if (!btn) return;
+            await saveQuestionEditorRow(btn);
+        });
+    }
+
+    if (quizCreatorQuizSelect && !quizCreatorQuizSelect.dataset.wired) {
+        quizCreatorQuizSelect.dataset.wired = "1";
+        quizCreatorQuizSelect.addEventListener("change", () => loadQuizCreatorPage(1));
+    }
+
+    if (quizCreatorRefreshBtn && !quizCreatorRefreshBtn.dataset.wired) {
+        quizCreatorRefreshBtn.dataset.wired = "1";
+        quizCreatorRefreshBtn.addEventListener("click", () => loadQuizCreatorPage(quizCreatorState.page || 1));
+    }
+
+    if (quizCreatorPrevBtn && !quizCreatorPrevBtn.dataset.wired) {
+        quizCreatorPrevBtn.dataset.wired = "1";
+        quizCreatorPrevBtn.addEventListener("click", () => {
+            if (quizCreatorState.page > 1) {
+                loadQuizCreatorPage(quizCreatorState.page - 1);
+            }
+        });
+    }
+
+    if (quizCreatorNextBtn && !quizCreatorNextBtn.dataset.wired) {
+        quizCreatorNextBtn.dataset.wired = "1";
+        quizCreatorNextBtn.addEventListener("click", () => {
+            if (quizCreatorState.totalPages > quizCreatorState.page) {
+                loadQuizCreatorPage(quizCreatorState.page + 1);
+            }
+        });
+    }
+
+    if (quizCreatorTbody && !quizCreatorTbody.dataset.wired) {
+        quizCreatorTbody.dataset.wired = "1";
+        quizCreatorTbody.addEventListener("click", async (e) => {
+            const btn = e.target.closest('button[data-action="add-source-question"]');
+            if (!btn) return;
+
+            const questionId = btn.getAttribute("data-question-id") || "";
+            if (!questionId || quizCreatorState.selectedQuestions.some(q => q.questionId === questionId)) {
+                return;
+            }
+
+            quizCreatorState.selectedQuestions.push({
+                questionId,
+                quizTitle: btn.getAttribute("data-quiz-title") || "",
+                questionText: btn.getAttribute("data-question-text") || ""
+            });
+            renderQuizCreatorSelectedList();
+            await loadQuizCreatorPage(quizCreatorState.page);
+        });
+    }
+
+    if (quizCreatorSelectedList && !quizCreatorSelectedList.dataset.wired) {
+        quizCreatorSelectedList.dataset.wired = "1";
+        quizCreatorSelectedList.addEventListener("click", async (e) => {
+            const btn = e.target.closest('button[data-action="remove-selected-question"]');
+            if (!btn) return;
+
+            const questionId = btn.getAttribute("data-question-id") || "";
+            quizCreatorState.selectedQuestions = quizCreatorState.selectedQuestions.filter(q => q.questionId !== questionId);
+            renderQuizCreatorSelectedList();
+            await loadQuizCreatorPage(quizCreatorState.page);
+        });
+    }
+
+    if (quizCreatorSaveBtn && !quizCreatorSaveBtn.dataset.wired) {
+        quizCreatorSaveBtn.dataset.wired = "1";
+        quizCreatorSaveBtn.addEventListener("click", () => createQuizFromSelectedQuestions());
+    }
+
+    if (refreshHistoryBtn && !refreshHistoryBtn.dataset.wired) {
+        refreshHistoryBtn.dataset.wired = "1";
+        refreshHistoryBtn.addEventListener("click", () => loadImportHistory());
+    }
+
+    if (exportImportHistoryBtn && !exportImportHistoryBtn.dataset.wired) {
+        exportImportHistoryBtn.dataset.wired = "1";
+        exportImportHistoryBtn.addEventListener("click", async () => {
+            try {
+                await downloadAuthorizedFile("/api/admin/reports/import-history.csv", "import-history.csv");
+                statusBox.textContent = "Downloaded import history CSV.";
+            } catch (err) {
+                statusBox.textContent = "ERROR " + err.message;
+            }
+        });
+    }
+
+    if (refreshUsageBtn && !refreshUsageBtn.dataset.wired) {
+        refreshUsageBtn.dataset.wired = "1";
+        refreshUsageBtn.addEventListener("click", () => loadUsageReport());
+    }
+
+    if (exportUserActivityBtn && !exportUserActivityBtn.dataset.wired) {
+        exportUserActivityBtn.dataset.wired = "1";
+        exportUserActivityBtn.addEventListener("click", async () => {
+            try {
+                await downloadAuthorizedFile("/api/admin/reports/user-activity.csv", "user-activity.csv");
+                statusBox.textContent = "Downloaded user activity CSV.";
+            } catch (err) {
+                statusBox.textContent = "ERROR " + err.message;
+            }
+        });
+    }
+
+    if (refreshSubmissionsBtn && !refreshSubmissionsBtn.dataset.wired) {
+        refreshSubmissionsBtn.dataset.wired = "1";
+        refreshSubmissionsBtn.addEventListener("click", () => loadPreEmploymentSubmissions());
+    }
+
+    const submissionTbodyEl = document.getElementById("submissionTbody");
+    if (submissionTbodyEl && !submissionTbodyEl.dataset.wired) {
+        submissionTbodyEl.dataset.wired = "1";
+        submissionTbodyEl.addEventListener("click", (e) => {
+            const btn = e.target.closest("button[data-submission]");
+            if (!btn) return;
+
+            const raw = btn.getAttribute("data-submission");
+            if (!raw) return;
+
+            try {
+                const row = JSON.parse(decodeURIComponent(raw));
+                const popup = window.open("", "_blank", "width=900,height=700");
+                if (!popup) return;
+
+                popup.document.write(`
+                    <html><head><title>Candidate Completion Summary</title></head>
+                    <body style="font-family:Segoe UI,Tahoma,sans-serif;padding:32px;color:#17324d;">
+                        <h1>Candidate Completion Summary</h1>
+                        <p><strong>Candidate:</strong> ${escapeHtml([row.firstName, row.lastName].filter(Boolean).join(" ").trim() || "(not provided)")}</p>
+                        <p><strong>Configured Quiz:</strong> ${escapeHtml(row.quizTitle || "")}</p>
+                        <p><strong>Source Exams:</strong> ${escapeHtml(row.sourceQuizTitles || "")}</p>
+                        <p><strong>Score:</strong> ${escapeHtml(row.scorePercent || 0)}% (${escapeHtml(row.correctCount || 0)} / ${escapeHtml(row.totalQuestions || 0)})</p>
+                        <p><strong>Threshold:</strong> ${escapeHtml(row.passingScorePercent || 0)}%</p>
+                        <p><strong>Outcome:</strong> ${escapeHtml(row.passed ? "Passed" : "Did not meet threshold")}</p>
+                        <p><strong>Submitted:</strong> ${escapeHtml(formatUtc(row.submittedUtc))}</p>
+                        <script>window.print();<\/script>
+                    </body></html>
+                `);
+                popup.document.close();
+            } catch {
+                submissionStatus.textContent = "Could not prepare printable summary.";
+            }
+        });
+    }
+
+    if (includeArchivedQuizzes && !includeArchivedQuizzes.dataset.wired) {
+        includeArchivedQuizzes.dataset.wired = "1";
+        includeArchivedQuizzes.addEventListener("change", () => loadQuizzes());
+    }
+
+    const categoryFilter = document.getElementById("quizCategoryFilter");
+    if (categoryFilter && !categoryFilter.dataset.wired) {
+        categoryFilter.dataset.wired = "1";
+        categoryFilter.addEventListener("change", () => loadQuizzes());
+    }
+
+    if (quizTbody && !quizTbody.dataset.wired) {
+        quizTbody.dataset.wired = "1";
+        quizTbody.addEventListener("click", async (e) => {
+            const btn = e.target.closest("button");
+            if (!btn) return;
+
+            const action = btn.getAttribute("data-action");
+            const id = btn.getAttribute("data-id");
+            if (!action || !id) return;
+
+            const { quizStatus } = getDashboardEls();
+
+            if (action === "copy") {
+                try {
+                    await navigator.clipboard.writeText(id);
+                    if (quizStatus) quizStatus.textContent = "Copied quiz ID: " + id;
+                } catch {
+                    const tmp = document.createElement("textarea");
+                    tmp.value = id;
+                    document.body.appendChild(tmp);
+                    tmp.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(tmp);
+                    if (quizStatus) quizStatus.textContent = "Copied quiz ID: " + id;
+                }
+                return;
+            }
+
+            if (action === "open") {
+                window.open("/quiz.html?quizId=" + encodeURIComponent(id), "_blank");
+                return;
+            }
+
+            if (action === "archive" || action === "restore") {
+                const verb = action === "archive" ? "Archiving" : "Restoring";
+                if (quizStatus) quizStatus.textContent = verb + " quiz...";
+
+                try {
+                    const res = await fetch(`/api/quiz/${encodeURIComponent(id)}/${action}`, {
+                        method: "POST",
+                        headers: { "Authorization": "Bearer " + token }
+                    });
+
+                    const payload = await res.text().catch(() => "");
+                    if (!res.ok) {
+                        if (quizStatus) quizStatus.textContent = `${action} failed: ${res.status}${payload ? " - " + payload : ""}`;
+                        return;
+                    }
+
+                    if (quizStatus) quizStatus.textContent = action === "archive" ? "Quiz archived." : "Quiz restored.";
+                    await loadQuizzes();
+                } catch (err) {
+                    if (quizStatus) quizStatus.textContent = `Error during ${action}: ` + err.message;
+                }
+                return;
+            }
+
+            if (action === "delete") {
+                const confirmText = prompt("Type DELETE to permanently delete this quiz (then re-import from CSV):");
+                if (confirmText !== "DELETE") return;
+
+                if (quizStatus) quizStatus.textContent = "Deleting quiz...";
+
+                try {
+                    const res = await fetch("/api/quiz/" + encodeURIComponent(id), {
+                        method: "DELETE",
+                        headers: { "Authorization": "Bearer " + token }
+                    });
+
+                    if (!res.ok) {
+                        const msg = await res.text().catch(() => "");
+                        if (quizStatus) quizStatus.textContent = "Delete failed: " + res.status + (msg ? (" - " + msg) : "");
+                        return;
+                    }
+
+                    if (quizStatus) quizStatus.textContent = "Deleted quiz " + id;
+                    await loadQuizzes();
+                } catch (err) {
+                    if (quizStatus) quizStatus.textContent = "Error deleting quiz: " + err.message;
+                }
+            }
+        });
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    syncLateSections();
+    wireDashboardButtonsOnce();
+
+    const saved = localStorage.getItem("jwtToken");
+    if (saved) {
+        token = saved;
+        showAdminPanels();
+
+        loadFiles();
+        loadUsers();
+        loadSmtpSettings();
+        loadQuizCategories();
+        loadQuizzes();
+        loadImportHistory();
+        loadUsageReport();
+        loadPreEmploymentSubmissions();
+        loadPreEmploymentConfig();
+        loadQuestionEditorPage(questionEditorState.page);
+        loadQuizCreatorPage(quizCreatorState.page);
+        renderQuizCreatorSelectedList();
+    }
+});
+
+	</script>
+
+
+<div id="quizSection" style="display:none;">
+    <hr />
+    <h2>Quizzes</h2>
+    <p class="muted">CSV is the source of truth. Use this list to copy Quiz IDs, open the runner, archive/restore quizzes, or delete a quiz when necessary.</p>
+    <button id="refreshQuizzesBtn" type="button">Refresh quizzes</button>
+    <label for="quizCategoryFilter" style="margin-left:12px;">Category:</label>
+    <select id="quizCategoryFilter" style="margin-left:6px;">
+        <option value="All">All</option>
+    </select>
+    <label style="margin-left:12px; display:inline-flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="includeArchivedQuizzes" />
+        Show archived
+    </label>
+
+    <div id="quizStatus" class="status"></div>
+    <table id="quizTable" style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Title</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Category</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Status</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Quiz ID</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Created (UTC)</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="quizTbody"></tbody>
+    </table>
+</div>
+
+<div id="questionEditorSection" style="display:none;">
+    <hr />
+    <h2>Question Editor</h2>
+    <p class="muted">Choose a quiz, edit question text, answer text, correctness, and the primary question image key. Questions are loaded a page at a time.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:end;">
+        <div>
+            <label for="questionEditorQuizSelect">Quiz</label><br />
+            <select id="questionEditorQuizSelect" style="min-width:340px;">
+                <option value="">Select a quiz to edit</option>
+            </select>
+        </div>
+        <div>
+            <button id="questionEditorRefreshBtn" type="button">Load questions</button>
+        </div>
+    </div>
+    <div id="questionEditorStatus" class="status" style="margin-top:10px;">Choose a quiz to begin editing questions.</div>
+    <div class="editorScrollArea">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Editable Question Record</th>
+                </tr>
+            </thead>
+            <tbody id="questionEditorTbody"></tbody>
+        </table>
+    </div>
+    <div id="questionEditorPager" style="display:none; margin-top:12px; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button id="questionEditorPrevBtn" type="button">Previous</button>
+        <button id="questionEditorNextBtn" type="button">Next</button>
+        <span class="muted" id="questionEditorPageInfo"></span>
+    </div>
+</div>
+
+<div id="quizCreatorSection" style="display:none;">
+    <hr />
+    <h2>Quiz Creator</h2>
+    <p class="muted">Load questions from any quiz whose title contains "Basic", add individual questions to your build list, and save the selection as a new custom-created quiz.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:end;">
+        <div>
+            <label for="quizCreatorQuizSelect">Basic source quiz</label><br />
+            <select id="quizCreatorQuizSelect" style="min-width:340px;">
+                <option value="">Select a Basic quiz</option>
+            </select>
+        </div>
+        <div>
+            <button id="quizCreatorRefreshBtn" type="button">Load questions</button>
+        </div>
+    </div>
+    <div id="quizCreatorStatus" class="status" style="margin-top:10px;">Choose a Basic quiz to load source questions.</div>
+    <div style="display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(280px, 0.8fr); gap:18px; margin-top:14px; align-items:start;">
+        <div>
+            <div class="editorScrollArea">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Available Source Questions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quizCreatorTbody"></tbody>
+                </table>
+            </div>
+            <div id="quizCreatorPager" style="display:none; margin-top:12px; gap:10px; align-items:center; flex-wrap:wrap;">
+                <button id="quizCreatorPrevBtn" type="button">Previous</button>
+                <button id="quizCreatorNextBtn" type="button">Next</button>
+                <span class="muted" id="quizCreatorPageInfo"></span>
+            </div>
+        </div>
+        <div class="editorSidebar" style="border:1px solid var(--line); border-radius:16px; padding:14px; background:#fcf8f1;">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                <strong>Selected Questions</strong>
+                <span class="pill" id="quizCreatorSelectedCount">0 selected</span>
+            </div>
+            <div id="quizCreatorSelectedList" style="margin-top:12px;"></div>
+            <div style="margin-top:16px;">
+                <label for="quizCreatorTitle">New quiz title</label><br />
+                <input id="quizCreatorTitle" type="text" placeholder="Custom Basic Review Quiz" />
+            </div>
+            <div style="margin-top:12px;">
+                <label for="quizCreatorCategory">Category</label><br />
+                <input id="quizCreatorCategory" type="text" value="Custom Created" />
+            </div>
+            <div style="margin-top:12px;">
+                <label for="quizCreatorPassThreshold">Pass threshold %</label><br />
+                <input id="quizCreatorPassThreshold" type="number" min="0" max="100" step="0.01" value="70" style="width:140px;" />
+            </div>
+            <div style="margin-top:14px;">
+                <button id="quizCreatorSaveBtn" type="button">Create quiz from selected questions</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="historySection" style="display:none;">
+    <hr />
+    <h2>Import History</h2>
+    <button id="refreshHistoryBtn" type="button">Refresh history</button>
+    <button id="exportImportHistoryBtn" type="button">Export import history CSV</button>
+    <div id="historyStatus" class="status"></div>
+    <table id="historyTable" style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Imported (UTC)</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">File</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Status</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Counts</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Message</th>
+            </tr>
+        </thead>
+        <tbody id="historyTbody"></tbody>
+    </table>
+</div>
+
+<div id="reportingSection" style="display:none;">
+    <hr />
+    <h2>User Metrics</h2>
+    <button id="refreshUsageBtn" type="button">Refresh usage report</button>
+    <button id="exportUserActivityBtn" type="button">Export user activity CSV</button>
+    <div id="usageStatus" class="status"></div>
+    <div class="muted" id="usageSummary" style="margin-top:8px;"></div>
+    <table style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Quiz</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Category</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Attempts</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Average Score</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Last Attempt</th>
+            </tr>
+        </thead>
+        <tbody id="usageTbody"></tbody>
+    </table>
+
+    <h3 style="margin-top:18px;">Recent User Attempts</h3>
+    <table style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">User</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Email</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Quiz</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Score</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Submitted</th>
+            </tr>
+        </thead>
+        <tbody id="recentAttemptsTbody"></tbody>
+    </table>
+</div>
+
+<div id="submissionSection" style="display:none;">
+    <hr />
+    <h2>Pre-Employment Attempts</h2>
+    <button id="refreshSubmissionsBtn" type="button">Refresh submissions</button>
+    <div id="submissionStatus" class="status"></div>
+    <table style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Candidate</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Configured Quiz</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Source Exams</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Score</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Submitted</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="submissionTbody"></tbody>
+    </table>
+</div>
+</div>
+</body>
+</html>

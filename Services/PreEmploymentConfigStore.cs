@@ -1,0 +1,115 @@
+using System.Text.Json;
+using QuizAPI.DTO;
+
+namespace QuizAPI.Services
+{
+    public interface IPreEmploymentConfigStore
+    {
+        Task<PreEmploymentConfigDto> GetAsync();
+        Task<PreEmploymentConfigDto> SaveAsync(PreEmploymentConfigDto config);
+    }
+
+    public sealed class FilePreEmploymentConfigStore : IPreEmploymentConfigStore
+    {
+        private const int DefaultQuestionCount = 20;
+        private const int MaxQuestionLimit = 100;
+
+        private readonly string _filePath;
+        private readonly object _lock = new();
+
+        public FilePreEmploymentConfigStore(IWebHostEnvironment env)
+        {
+            var appData = Path.Combine(env.ContentRootPath, "App_Data");
+            Directory.CreateDirectory(appData);
+            _filePath = Path.Combine(appData, "preemployment_config.json");
+        }
+
+        public Task<PreEmploymentConfigDto> GetAsync()
+        {
+            lock (_lock)
+            {
+                var config = LoadUnsafe();
+                return Task.FromResult(config);
+            }
+        }
+
+        public Task<PreEmploymentConfigDto> SaveAsync(PreEmploymentConfigDto config)
+        {
+            ArgumentNullException.ThrowIfNull(config);
+
+            lock (_lock)
+            {
+                var sanitized = Sanitize(config);
+                var json = JsonSerializer.Serialize(sanitized, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                File.WriteAllText(_filePath, json);
+                return Task.FromResult(sanitized);
+            }
+        }
+
+        private PreEmploymentConfigDto LoadUnsafe()
+        {
+            try
+            {
+                if (File.Exists(_filePath))
+                {
+                    var json = File.ReadAllText(_filePath);
+                    var saved = JsonSerializer.Deserialize<PreEmploymentConfigDto>(json, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                    if (saved != null)
+                    {
+                        return Sanitize(saved);
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return Sanitize(new PreEmploymentConfigDto());
+        }
+
+        private static PreEmploymentConfigDto Sanitize(PreEmploymentConfigDto source)
+        {
+            var maxQuestionCount = source.MaxQuestionCount <= 0 ? MaxQuestionLimit : source.MaxQuestionCount;
+            if (maxQuestionCount > MaxQuestionLimit)
+            {
+                maxQuestionCount = MaxQuestionLimit;
+            }
+
+            var questionCount = source.QuestionCount <= 0 ? DefaultQuestionCount : source.QuestionCount;
+            if (questionCount > maxQuestionCount)
+            {
+                questionCount = maxQuestionCount;
+            }
+
+            return new PreEmploymentConfigDto
+            {
+                Title = string.IsNullOrWhiteSpace(source.Title) ? "Pre-Employment Quiz" : source.Title.Trim(),
+                QuizId = source.QuizId,
+                QuizTitle = string.IsNullOrWhiteSpace(source.QuizTitle) ? null : source.QuizTitle.Trim(),
+                QuizIds = (source.QuizIds ?? new List<Guid>())
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList(),
+                QuizTitles = (source.QuizTitles ?? new List<string>())
+                    .Where(title => !string.IsNullOrWhiteSpace(title))
+                    .Select(title => title.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                QuestionCount = questionCount,
+                MaxQuestionCount = maxQuestionCount,
+                TimeLimitMinutes = Math.Max(0, source.TimeLimitMinutes),
+                PassingScorePercent = source.PassingScorePercent < 0 ? 0 : source.PassingScorePercent,
+                RandomizeAnswers = source.RandomizeAnswers,
+                ShowCorrectAnswersAtEnd = source.ShowCorrectAnswersAtEnd
+            };
+        }
+    }
+}

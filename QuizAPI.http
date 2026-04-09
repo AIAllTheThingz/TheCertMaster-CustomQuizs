@@ -1,0 +1,35 @@
+@QuizAPI_HostAddress = https://localhost:5001
+@AdminToken = REPLACE_WITH_JWT
+
+### Login
+POST {{QuizAPI_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "Email": "admin@example.com",
+  "Password": "REPLACE_WITH_PASSWORD"
+}
+
+### Upload Sample Package
+POST {{QuizAPI_HostAddress}}/api/import/upload-package
+Authorization: Bearer {{AdminToken}}
+Content-Type: multipart/form-data; boundary=----CodexBoundary
+
+------CodexBoundary
+Content-Disposition: form-data; name="File"; filename="sample-import-package.zip"
+Content-Type: application/zip
+
+< D:\Quiz_Application\QuizAPI\Samples\ImportPackage\sample-import-package.zip
+------CodexBoundary--
+
+### Process Returned CSV File
+POST {{QuizAPI_HostAddress}}/api/import/process/REPLACE_WITH_UPLOADED_CSV_FILENAME
+Authorization: Bearer {{AdminToken}}
+
+### List Imported Quiz
+GET {{QuizAPI_HostAddress}}/api/quiz?category=Safety
+Accept: application/json
+
+### Fetch Randomized Imported Quiz
+GET {{QuizAPI_HostAddress}}/api/quiz/REPLACE_WITH_IMPORTED_QUIZ_ID/random
+Accept: application/json

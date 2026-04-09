@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quiz Selection</title>
+    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <style>
+        :root {
+            --bg: #f3f6f9;
+            --panel: #ffffff;
+            --panel-2: #f8fbfd;
+            --ink: #17324d;
+            --muted: #5b6f83;
+            --accent: #0d5e8c;
+            --accent-2: #8f1d2c;
+            --line: #d7e0e8;
+            --shadow: 0 14px 34px rgba(20, 44, 68, 0.08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--ink);
+            min-height: 100vh;
+        }
+        .wrap {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 40px 20px 64px;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+        .heroGrid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+            gap: 20px;
+            align-items: stretch;
+        }
+        h1 {
+            font-size: 3rem;
+            margin: 0 0 10px;
+        }
+        .lead {
+            color: var(--muted);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            margin: 0;
+            max-width: 720px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .stat {
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 14px 16px;
+        }
+        .stat strong {
+            display: block;
+            font-size: 1.4rem;
+            margin-bottom: 4px;
+        }
+        .stat span {
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+        .accountBubble {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+            justify-content: center;
+            height: 100%;
+        }
+        .accountBubble strong {
+            color: var(--ink);
+        }
+        .accountBubble p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .accountStatus {
+            font-size: 0.96rem;
+            color: var(--muted);
+            min-height: 22px;
+        }
+        .accountLinks {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        button {
+            appearance: none;
+            border: none;
+            border-radius: 999px;
+            padding: 11px 16px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .primary {
+            background: var(--accent);
+            color: white;
+        }
+        .secondary {
+            background: var(--accent-2);
+            color: white;
+        }
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .config {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 20px;
+        }
+        .sectionTitle {
+            margin: 0 0 12px;
+            font-size: 1.25rem;
+        }
+        .muted {
+            color: var(--muted);
+        }
+        .quizList {
+            display: grid;
+            gap: 10px;
+            max-height: 480px;
+            overflow: auto;
+            padding-right: 6px;
+        }
+        .quizItem {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: start;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+        }
+        .quizItem input {
+            margin-top: 4px;
+        }
+        .quizMeta strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        .quizMeta span {
+            display: inline-block;
+            margin-right: 8px;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+        .quizCount {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #efe3d4;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+        .controls {
+            display: grid;
+            gap: 14px;
+        }
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+        label {
+            font-size: 0.95rem;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            border: 1px solid var(--line);
+            background: white;
+            color: var(--ink);
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: 1rem;
+        }
+        .checkboxRow {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+        }
+        .status {
+            white-space: pre-wrap;
+            min-height: 24px;
+            color: var(--muted);
+        }
+        .tip {
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+        @media (max-width: 900px) {
+            .heroGrid,
+            .config, .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <nav class="site-menu" aria-label="Site">
+            <a href="/">Home</a>
+            <a href="/register.html">Registration</a>
+            <a href="/user.html">User Page</a>
+            <a href="/manage.html">Management Panel</a>
+            <a href="/preemployment.html">Pre-Employment</a>
+            <a href="/api.html">API Tools</a>
+        </nav>
+        <section class="heroGrid">
+            <div class="panel">
+                <h1>Quiz Selection</h1>
+                <p class="lead">Build a quiz from one or more available exams, choose how many random questions to pull from each selected quiz, optionally run the full pool, and attach an optional timer before launching the runner.</p>
+                <div class="stats">
+                    <div class="stat">
+                        <strong id="quizCountStat">0</strong>
+                        <span>Available quizzes</span>
+                    </div>
+                    <div class="stat">
+                        <strong id="selectedQuizStat">0</strong>
+                        <span>Selected quizzes</span>
+                    </div>
+                    <div class="stat">
+                        <strong id="questionPoolStat">0</strong>
+                        <span>Questions in selected pool</span>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="panel accountBubble">
+                <strong>Account</strong>
+                <p>Create an employee account on the registration page, sign in on the user page, or open your user profile to review saved quiz history.</p>
+                <div class="accountStatus" id="accountStatus"></div>
+                <div class="accountLinks">
+                    <a class="app-link" href="/register.html#register" id="createAccountLink">Create an Account</a>
+                    <a class="app-link" href="/user.html#signin" id="signInLink">Sign In</a>
+                    <a class="app-link" href="/user.html" id="profileLink">View My Profile</a>
+                    <a class="app-link" href="#" id="logoutBtn">Logout</a>
+                </div>
+            </aside>
+        </section>
+
+        <section class="config">
+            <div class="panel">
+                <h2 class="sectionTitle">Available Quizzes</h2>
+                <p class="muted">Select one or more quizzes to build the question pool.</p>
+                <div class="actions" style="margin-top:0; margin-bottom: 14px;">
+                    <button type="button" class="primary" id="btnSelectAll">Select All</button>
+                    <button type="button" class="secondary" id="btnClearAll">Clear All</button>
+                </div>
+                <div id="quizList" class="quizList"></div>
+            </div>
+
+            <div class="panel">
+                <h2 class="sectionTitle">Launch Settings</h2>
+                <div class="controls">
+                    <div class="field">
+                        <label for="questionCount">Questions per selected quiz</label>
+                        <input id="questionCount" type="number" min="20" value="20" />
+                        <div class="tip">Each selected quiz contributes this many random questions. Three selected quizzes at 23 each will launch 69 total questions.</div>
+                    </div>
+
+                    <label class="checkboxRow">
+                        <input id="allQuestions" type="checkbox" />
+                        <span>Use all questions from the selected pool</span>
+                    </label>
+
+                    <div class="field">
+                        <label for="timerMinutes">Optional timer (minutes)</label>
+                        <input id="timerMinutes" type="number" min="0" value="0" />
+                        <div class="tip">Set to `0` to run without a timer.</div>
+                    </div>
+
+                    <div class="field">
+                        <label for="difficultyFilter">Question difficulty filter</label>
+                        <select id="difficultyFilter">
+                            <option value="Any">Any difficulty</option>
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                            <option value="Unspecified">Unspecified</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="tagFilter">Question tags filter</label>
+                        <input id="tagFilter" type="text" placeholder="Comma-separated tags like safety, compliance" />
+                        <div class="tip">Only questions matching at least one entered tag will be included.</div>
+                    </div>
+
+                    <div class="field">
+                        <label for="quizTitle">Quiz title</label>
+                        <input id="quizTitle" type="text" value="Configured Quiz" />
+                    </div>
+
+                    <div class="status" id="status">Loading quizzes...</div>
+
+                    <div class="actions">
+                        <button type="button" class="primary" id="btnStart">Start Quiz</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const quizList = document.getElementById('quizList');
+        const quizCountStat = document.getElementById('quizCountStat');
+        const selectedQuizStat = document.getElementById('selectedQuizStat');
+        const questionPoolStat = document.getElementById('questionPoolStat');
+        const questionCount = document.getElementById('questionCount');
+        const allQuestions = document.getElementById('allQuestions');
+        const timerMinutes = document.getElementById('timerMinutes');
+        const difficultyFilter = document.getElementById('difficultyFilter');
+        const tagFilter = document.getElementById('tagFilter');
+        const quizTitle = document.getElementById('quizTitle');
+        const status = document.getElementById('status');
+        const btnSelectAll = document.getElementById('btnSelectAll');
+        const btnClearAll = document.getElementById('btnClearAll');
+        const btnStart = document.getElementById('btnStart');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const accountStatus = document.getElementById('accountStatus');
+        const createAccountLink = document.getElementById('createAccountLink');
+        const signInLink = document.getElementById('signInLink');
+        const profileLink = document.getElementById('profileLink');
+
+        let quizzes = [];
+
+        function setStatus(message) {
+            status.textContent = message || '';
+        }
+
+        function clearToken() {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('apiJwtToken');
+        }
+
+        async function loadSignedInState() {
+            const token = localStorage.getItem('jwtToken') || localStorage.getItem('apiJwtToken') || '';
+            if (!token) {
+                accountStatus.textContent = 'Not signed in.';
+                createAccountLink.style.display = '';
+                signInLink.style.display = '';
+                profileLink.textContent = 'View My Profile';
+                logoutBtn.style.display = 'none';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/profile?page=1&pageSize=1', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                if (!res.ok) {
+                    clearToken();
+                    accountStatus.textContent = 'Not signed in.';
+                    createAccountLink.style.display = '';
+                    signInLink.style.display = '';
+                    profileLink.textContent = 'View My Profile';
+                    logoutBtn.style.display = 'none';
+                    return;
+                }
+
+                const profile = await res.json();
+                const firstName = profile.FirstName || profile.firstName || '';
+                const lastName = profile.LastName || profile.lastName || '';
+                const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.UserName || profile.userName || profile.Email || profile.email || 'User';
+
+                accountStatus.textContent = 'Logged in as ' + displayName;
+                createAccountLink.style.display = 'none';
+                signInLink.style.display = 'none';
+                profileLink.textContent = 'View My Profile';
+                logoutBtn.style.display = '';
+            } catch {
+                accountStatus.textContent = 'Not signed in.';
+                logoutBtn.style.display = 'none';
+            }
+        }
+
+        async function loadQuizzes() {
+            try {
+                const res = await fetch('/api/quiz');
+                if (!res.ok) throw new Error('Failed to load quizzes.');
+
+                quizzes = await res.json();
+                renderQuizList();
+                updateSelectionSummary();
+                setStatus(quizzes.length ? 'Select one or more quizzes to build your question pool.' : 'No quizzes are available yet.');
+            } catch (err) {
+                console.error(err);
+                quizzes = [];
+                renderQuizList();
+                updateSelectionSummary();
+                setStatus('Could not load quizzes.');
+            }
+        }
+
+        function renderQuizList() {
+            quizList.innerHTML = '';
+            quizCountStat.textContent = String(quizzes.length);
+
+            if (!quizzes.length) {
+                quizList.innerHTML = '<div class="muted">No quizzes found.</div>';
+                return;
+            }
+
+            for (const quiz of quizzes) {
+                const id = quiz.Id || quiz.id;
+                const title = quiz.Title || quiz.title || '(untitled)';
+                const category = quiz.Category || quiz.category || 'Uncategorized';
+                const count = Number(quiz.QuestionCount ?? quiz.questionCount ?? 0);
+
+                const label = document.createElement('label');
+                label.className = 'quizItem';
+                label.innerHTML = `
+                    <input type="checkbox" value="${id}" data-count="${count}" />
+                    <div class="quizMeta">
+                        <strong>${escapeHtml(title)}</strong>
+                        <span>${escapeHtml(category)}</span>
+                        <span>${count} question(s)</span>
+                    </div>
+                    <div class="quizCount">${count}</div>
+                `;
+
+                const input = label.querySelector('input');
+                input.addEventListener('change', updateSelectionSummary);
+                quizList.appendChild(label);
+            }
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function getSelectedQuizInputs() {
+            return Array.from(quizList.querySelectorAll('input[type="checkbox"]:checked'));
+        }
+
+        function getMinimumSelectedQuizCount(selected) {
+            if (!selected.length) {
+                return 0;
+            }
+
+            return selected.reduce(
+                (min, item) => Math.min(min, Number(item.dataset.count || 0)),
+                Number.MAX_SAFE_INTEGER
+            );
+        }
+
+        function updateSelectionSummary() {
+            const selected = getSelectedQuizInputs();
+            const poolCount = selected.reduce((sum, item) => sum + Number(item.dataset.count || 0), 0);
+
+            selectedQuizStat.textContent = String(selected.length);
+            questionPoolStat.textContent = String(poolCount);
+
+            if (allQuestions.checked) {
+                questionCount.value = poolCount ? String(poolCount) : '20';
+                questionCount.disabled = true;
+            } else {
+                questionCount.disabled = false;
+            }
+
+            btnStart.disabled = selected.length === 0;
+        }
+
+        function validateSelection() {
+            const selected = getSelectedQuizInputs();
+            if (!selected.length) {
+                return 'Select at least one quiz.';
+            }
+
+            const poolCount = selected.reduce((sum, item) => sum + Number(item.dataset.count || 0), 0);
+            const minQuizCount = getMinimumSelectedQuizCount(selected);
+            if (poolCount === 0) {
+                return 'The selected quiz pool does not contain any questions.';
+            }
+
+            if (allQuestions.checked) {
+                return null;
+            }
+
+            const desired = Number(questionCount.value || 0);
+            if (desired < 20) {
+                return 'Questions per selected quiz must be at least 20 unless you select “All questions”.';
+            }
+
+            if (desired > minQuizCount) {
+                return `Questions per selected quiz cannot exceed the smallest selected quiz (${minQuizCount}).`;
+            }
+
+            return null;
+        }
+
+        function startConfiguredQuiz() {
+            const error = validateSelection();
+            if (error) {
+                setStatus(error);
+                return;
+            }
+
+            const selected = getSelectedQuizInputs();
+            const poolCount = selected.reduce((sum, item) => sum + Number(item.dataset.count || 0), 0);
+            const launchConfig = {
+                mode: 'selection',
+                quizIds: selected.map(item => item.value),
+                allQuestions: allQuestions.checked,
+                questionCount: allQuestions.checked ? poolCount : Number(questionCount.value || 20),
+                timerMinutes: Math.max(0, Number(timerMinutes.value || 0)),
+                title: (quizTitle.value || '').trim() || 'Configured Quiz',
+                difficulty: (difficultyFilter.value || 'Any').trim(),
+                tags: (tagFilter.value || '')
+                    .split(',')
+                    .map(tag => tag.trim())
+                    .filter(Boolean)
+            };
+
+            sessionStorage.setItem('quizRunnerLaunchConfig', JSON.stringify(launchConfig));
+            window.location.href = '/quiz.html';
+        }
+
+        btnSelectAll.addEventListener('click', () => {
+            for (const input of quizList.querySelectorAll('input[type="checkbox"]')) {
+                input.checked = true;
+            }
+            updateSelectionSummary();
+        });
+
+        btnClearAll.addEventListener('click', () => {
+            for (const input of quizList.querySelectorAll('input[type="checkbox"]')) {
+                input.checked = false;
+            }
+            updateSelectionSummary();
+        });
+
+        allQuestions.addEventListener('change', updateSelectionSummary);
+        questionCount.addEventListener('input', () => setStatus(''));
+        timerMinutes.addEventListener('input', () => setStatus(''));
+        btnStart.addEventListener('click', startConfiguredQuiz);
+        logoutBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            clearToken();
+            loadSignedInState();
+            setStatus('You have been signed out.');
+        });
+
+        loadSignedInState();
+        loadQuizzes();
+    </script>
+</body>
+</html>

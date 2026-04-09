@@ -1,0 +1,5 @@
+QuizTitle,Category,QuestionImgKey,QuestionText,AnswerText,IsCorrect
+Sample Safety Quiz,Safety,forklift-safety,"What should an operator do before using a forklift?","Complete a pre-shift inspection",true
+Sample Safety Quiz,Safety,forklift-safety,"What should an operator do before using a forklift?","Skip checks if the forklift worked yesterday",false
+Sample Safety Quiz,Safety,,"How should a spill in a walkway be handled?","Clean it or report it immediately",true
+Sample Safety Quiz,Safety,,"How should a spill in a walkway be handled?","Leave it for the next shift",false

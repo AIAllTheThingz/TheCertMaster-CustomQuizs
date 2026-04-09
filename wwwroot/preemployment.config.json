@@ -1,0 +1,11 @@
+{
+  "title": "Pre-Employment Quiz",
+  "defaultQuestionCount": 80,
+  "maxQuestionCount": 100,
+  "allowedCategories": [],
+  "defaultCategories": [],
+  "timeLimitMinutes": 0,
+  "passingScorePercent": 70,
+  "randomizeAnswers": true,
+  "showCorrectAnswersAtEnd": false
+}
