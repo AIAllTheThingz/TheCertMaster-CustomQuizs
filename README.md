@@ -27,9 +27,6 @@ It supports:
 
 ![Landing page](Documentation/assets/landing-page.png)
 
-### Management Panel
-
-![Management panel](Documentation/assets/management-panel.png)
 
 ### Question Editor
 
