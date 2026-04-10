@@ -227,7 +227,7 @@ else {
 }
 
 Write-Step "Restarting IIS app pool and site"
-Restart-WebAppPool -Name $AppPoolName
+Start-WebAppPool -Name $AppPoolName
 Start-Website -Name $SiteName
 
 Write-Step "Deployment complete"
