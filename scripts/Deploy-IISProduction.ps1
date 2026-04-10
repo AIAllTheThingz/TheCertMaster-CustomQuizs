@@ -39,6 +39,18 @@ function Ensure-Directory {
     }
 }
 
+function Clear-DirectoryContents {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    Get-ChildItem -LiteralPath $Path -Force | ForEach-Object {
+        Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop
+    }
+}
+
 function Set-IisAspNetCoreEnvVar {
     param(
         [string]$Location,
@@ -86,7 +98,19 @@ Write-Step "Ensuring deployment path exists"
 Ensure-Directory -Path $SitePath
 
 Write-Step "Expanding deployment package"
-Expand-Archive -Path $ZipPath -DestinationPath $SitePath -Force
+$stagingPath = Join-Path ([System.IO.Path]::GetTempPath()) ("QuizAPI_Deploy_" + [System.Guid]::NewGuid().ToString("N"))
+Ensure-Directory -Path $stagingPath
+
+try {
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $stagingPath -Force
+    Clear-DirectoryContents -Path $SitePath
+    Copy-Item -Path (Join-Path $stagingPath '*') -Destination $SitePath -Recurse -Force
+}
+finally {
+    if (Test-Path $stagingPath) {
+        Remove-Item -LiteralPath $stagingPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 
 Write-Step "Ensuring runtime folders exist"
 @(
