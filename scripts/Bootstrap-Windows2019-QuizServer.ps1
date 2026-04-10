@@ -112,6 +112,44 @@ function Invoke-ProcessChecked {
     }
 }
 
+function Update-ProcessPathFromMachine {
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $pathParts = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($machinePath)) {
+        $pathParts += $machinePath
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($userPath)) {
+        $pathParts += $userPath
+    }
+
+    if ($pathParts.Count -gt 0) {
+        $env:Path = ($pathParts -join ";")
+    }
+}
+
+function Get-DotNetCommandPath {
+    $command = Get-Command dotnet.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+        return $command.Source
+    }
+
+    $commonPaths = @(
+        (Join-Path ${env:ProgramFiles} "dotnet\dotnet.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "dotnet\dotnet.exe")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($candidate in $commonPaths) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Could not locate dotnet.exe. Confirm the .NET SDK is installed."
+}
+
 function Get-InstalledProductDisplayNames {
     $paths = @(
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -197,7 +235,8 @@ function Test-DotNetSdkInstalled {
     param([string]$Channel)
 
     try {
-        $sdks = & dotnet --list-sdks 2>$null
+        $dotnetPath = Get-DotNetCommandPath
+        $sdks = & $dotnetPath --list-sdks 2>$null
         if ($LASTEXITCODE -ne 0) {
             return $false
         }
@@ -268,6 +307,7 @@ function Install-DotNetSdk {
     Write-Step "Installing .NET SDK for channel $DotNetChannel"
     Download-File -Url $asset.url -DestinationPath $installerPath
     Invoke-ProcessChecked -FilePath $installerPath -ArgumentList @("/install", "/quiet", "/norestart") -StepName ".NET SDK installation"
+    Update-ProcessPathFromMachine
 }
 
 function Install-HostingBundle {
@@ -352,12 +392,14 @@ function Expand-RepoZip {
 }
 
 function Ensure-DotNetEfInstalled {
+    Update-ProcessPathFromMachine
+    $dotnetPath = Get-DotNetCommandPath
     $toolsDir = Join-Path $env:USERPROFILE ".dotnet\tools"
     $dotnetEfPath = Join-Path $toolsDir "dotnet-ef.exe"
 
     if (-not (Test-Path -LiteralPath $dotnetEfPath)) {
         Write-Step "Installing dotnet-ef"
-        Invoke-ProcessChecked -FilePath "dotnet" -ArgumentList @("tool", "install", "--global", "dotnet-ef", "--version", "9.*") -StepName "dotnet-ef installation"
+        Invoke-ProcessChecked -FilePath $dotnetPath -ArgumentList @("tool", "install", "--global", "dotnet-ef", "--version", "9.*") -StepName "dotnet-ef installation"
     }
 
     if ($env:PATH -notlike "*$toolsDir*") {
