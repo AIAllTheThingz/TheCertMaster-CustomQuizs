@@ -4,12 +4,12 @@ param(
     [string]$ZipPath = "C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_20260318_182000.zip",
     [string]$SiteName = "QuizAPI",
     [string]$SitePath = "C:\sites\QuizAPI\current",
-    [string]$HostName = "oumwqapptst02.oumed.net",
+    [string]$HostName = "WIN2K22IIS01",
     [string]$AppPoolName = "QuizAppPool",
     [ValidateSet("http", "https")]
-    [string]$Protocol = "https",
-    [int]$Port = 443,
-    [string]$ConnectionString = "Server=.\SQLEXPRESS;Database=QuizDB;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;",
+    [string]$Protocol = "http",
+    [int]$Port = 80,
+    [string]$ConnectionString = "Server=.\SQLEXPRESS;Database=TheCertMasterCorporateDB;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;",
     [string]$JwtIssuer = "QuizAPI",
     [string]$JwtAudience = "QuizAPIUsers",
     [string]$JwtKey,
@@ -187,7 +187,7 @@ $appPoolIdentity = "IIS AppPool\${AppPoolName}"
 
 if ($RunMigrations) {
     Write-Step "Skipping EF migration execution in published output"
-    Write-Warning "Published IIS output does not contain the project file for 'dotnet ef'. Use the restored QuizDB backup or run migrations from the source project."
+    Write-Warning "Published IIS output does not contain the project file for 'dotnet ef'. Use the restored repository seed backup or run migrations from the source project."
 }
 else {
     Write-Step "Database migration step skipped"

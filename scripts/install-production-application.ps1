@@ -15,7 +15,7 @@ param(
     [string]$HostName = '',
     [string]$CertificateThumbprint = '',
     [string]$SqlInstance = '.\SQLEXPRESS',
-    [string]$DatabaseName = 'QuizDB',
+    [string]$DatabaseName = 'TheCertMasterCorporateDB',
     [string]$ConnectionString = '',
     [string]$PublicBaseUrl = '',
     [Nullable[bool]]$EnableHttpsRedirection = $null,
@@ -163,7 +163,7 @@ function Get-NormalizedBackupPath {
     param([string]$PathValue, [string]$SourceRoot)
 
     if ([string]::IsNullOrWhiteSpace($PathValue)) {
-        return Join-Path $SourceRoot 'DeploymentBundle\QuizDB.bak'
+        return Join-Path $SourceRoot 'DeploymentBundle\TheCertMasterCorporateDB.bak'
     }
 
     if ([System.IO.Path]::IsPathRooted($PathValue)) {
@@ -366,7 +366,7 @@ $deployScript = Join-Path $PSScriptRoot 'Deploy-IISProduction.ps1'
 $smokeTestScript = Join-Path $PSScriptRoot 'post-deploy-smoke-test.ps1'
 
 if ($RestoreSeedDatabase) {
-    Write-Step 'Restoring seeded QuizDB content from the repository backup'
+    Write-Step "Restoring seeded $DatabaseName content from the repository backup"
     Restore-DatabaseFromBackup -BackupPath $DatabaseBackupPath
 }
 

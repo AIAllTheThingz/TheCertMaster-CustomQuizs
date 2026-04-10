@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$ServerInstance = ".\SQLEXPRESS",
-    [string]$Database = "DevQuizDB"
+    [string]$Database = "TheCertMasterCorporateDB"
 )
 
 $ErrorActionPreference = "Stop"

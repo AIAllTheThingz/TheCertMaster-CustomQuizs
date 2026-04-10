@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = 'http://localhost',
+    [string]$BaseUrl = 'http://WIN2K22IIS01',
     [string]$AdminEmail = 'admin@quizapi.local',
     [string]$AdminPassword = 'Admin@123'
 )

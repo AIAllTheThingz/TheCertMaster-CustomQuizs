@@ -8,9 +8,9 @@
     HttpPort = 80
     HttpsPort = 443
 
-    # Leave blank to use localhost for HTTP-only installs.
-    HostName = ''
-    PublicBaseUrl = 'http://localhost'
+    # Default Windows Server 2022 host baseline for the first HTTP rollout.
+    HostName = 'WIN2K22IIS01'
+    PublicBaseUrl = 'http://WIN2K22IIS01'
     EnableHttpsRedirection = $false
 
     # Leave blank to auto-generate a strong key during install.
@@ -20,9 +20,9 @@
     JwtAccessTokenMinutes = 60
 
     SqlInstance = '.\SQLEXPRESS'
-    DatabaseName = 'QuizDB'
+    DatabaseName = 'TheCertMasterCorporateDB'
     RestoreSeedDatabase = $true
-    DatabaseBackupPath = 'DeploymentBundle\QuizDB.bak'
+    DatabaseBackupPath = 'DeploymentBundle\TheCertMasterCorporateDB.bak'
 
     # Leave blank to let the installer build a local SQL Express connection string.
     ConnectionString = ''
