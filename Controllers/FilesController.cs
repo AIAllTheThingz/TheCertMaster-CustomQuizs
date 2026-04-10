@@ -20,7 +20,7 @@ namespace QuizAPI.Controllers
         {
             var uploadsRoot = GetPrivateUploadsRoot();
             if (!Directory.Exists(uploadsRoot))
-                return Ok(new List<object>());
+                return Ok(Array.Empty<object>());
 
             var files = Directory.GetFiles(uploadsRoot)
                 .Select(path => new
@@ -54,10 +54,7 @@ namespace QuizAPI.Controllers
             return Ok($"Deleted {fileName}");
         }
 
-        private string GetPrivateUploadsRoot()
-        {
-            return Path.Combine(_env.ContentRootPath, "App_Data", "uploads");
-        }
+        private string GetPrivateUploadsRoot() => Path.Combine(_env.ContentRootPath, "App_Data", "uploads");
 
         private static string? GetSafeChildPath(string root, string fileName)
         {

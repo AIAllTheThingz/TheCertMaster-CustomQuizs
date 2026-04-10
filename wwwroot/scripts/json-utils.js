@@ -10,11 +10,11 @@
         }
 
         if (value && typeof value === 'object') {
-            var normalized = {};
-            for (var _i = 0, _a = Object.entries(value); _i < _a.length; _i++) {
-                var entry = _a[_i];
-                normalized[toCamelKey(entry[0])] = normalizeKeys(entry[1]);
+            const normalized = {};
+            for (const [key, item] of Object.entries(value)) {
+                normalized[toCamelKey(key)] = normalizeKeys(item);
             }
+
             return normalized;
         }
 
@@ -22,14 +22,13 @@
     }
 
     async function readJsonNormalized(response) {
-        var json = await response.json();
+        const json = await response.json();
         return normalizeKeys(json);
     }
 
     function getValue(obj) {
-        var keys = Array.prototype.slice.call(arguments, 1);
-        for (var i = 0; i < keys.length; i++) {
-            var key = keys[i];
+        const keys = Array.prototype.slice.call(arguments, 1);
+        for (const key of keys) {
             if (obj && obj[key] !== undefined && obj[key] !== null) {
                 return obj[key];
             }
