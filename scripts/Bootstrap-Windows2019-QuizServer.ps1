@@ -61,6 +61,22 @@ function Ensure-Directory {
     }
 }
 
+function Test-DirectoryWritable {
+    param([string]$Path)
+
+    Ensure-Directory -Path $Path
+    $probePath = Join-Path $Path (".write-test-" + [Guid]::NewGuid().ToString("N") + ".tmp")
+
+    try {
+        Set-Content -Path $probePath -Value "ok" -Encoding ASCII -Force
+        Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-Timestamp {
     return Get-Date -Format "yyyyMMdd_HHmmss"
 }
@@ -86,6 +102,46 @@ function Save-GeneratedJwtKeyFile {
 
     & icacls $Path /inheritance:r | Out-Null
     & icacls $Path /grant:r "Administrators:F" "SYSTEM:F" | Out-Null
+}
+
+function Prepare-EnvironmentPaths {
+    param(
+        [string]$DownloadsRootPath,
+        [string]$WorkspaceRootPath,
+        [string]$LogRootPath,
+        [string]$SiteRootPath,
+        [string]$RepoName,
+        [string]$JwtRecoveryPath
+    )
+
+    Write-Step "Preparing environment directories"
+
+    $pathsToPrepare = @(
+        (Split-Path -Path $DownloadsRootPath -Parent),
+        $DownloadsRootPath,
+        $WorkspaceRootPath,
+        (Join-Path $WorkspaceRootPath $RepoName),
+        (Split-Path -Path $LogRootPath -Parent),
+        $LogRootPath,
+        (Split-Path -Path $SiteRootPath -Parent),
+        $SiteRootPath
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    if (-not [string]::IsNullOrWhiteSpace($JwtRecoveryPath)) {
+        $jwtRecoveryDirectory = Split-Path -Path $JwtRecoveryPath -Parent
+        if (-not [string]::IsNullOrWhiteSpace($jwtRecoveryDirectory)) {
+            $pathsToPrepare += $jwtRecoveryDirectory
+        }
+    }
+
+    $pathsToPrepare = $pathsToPrepare | Select-Object -Unique
+
+    foreach ($path in $pathsToPrepare) {
+        Ensure-Directory -Path $path
+        if (-not (Test-DirectoryWritable -Path $path)) {
+            throw "Directory is not writable: $path"
+        }
+    }
 }
 
 function Download-File {
@@ -578,6 +634,13 @@ function New-PostInstallReport {
         "- Database Update Attempted: $(-not $SkipDatabaseUpdate)",
         "- Deploy Attempted: $(-not $SkipDeploy)",
         "",
+        "## Prepared Paths",
+        "",
+        "- Downloads Root: $DownloadsRoot",
+        "- Workspace Root: $WorkspaceRoot",
+        "- Log Root: $LogRoot",
+        "- Site Root: $SitePath",
+        "",
         "## SQL Service",
         "",
         "- Service Found: $([bool]$sqlService)",
@@ -643,6 +706,18 @@ $transcriptPath = Join-Path $LogRoot "bootstrap-$timestamp.log"
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = Join-Path $LogRoot "bootstrap-report-$timestamp.md"
 }
+
+if ($SaveGeneratedJwtKey -and [string]::IsNullOrWhiteSpace($GeneratedJwtKeyPath)) {
+    $GeneratedJwtKeyPath = Join-Path $LogRoot "secrets\jwtkey-$timestamp.txt"
+}
+
+Prepare-EnvironmentPaths `
+    -DownloadsRootPath $DownloadsRoot `
+    -WorkspaceRootPath $WorkspaceRoot `
+    -LogRootPath $LogRoot `
+    -SiteRootPath $SitePath `
+    -RepoName $RepoFolderName `
+    -JwtRecoveryPath $GeneratedJwtKeyPath
 
 try {
     Start-Transcript -Path $transcriptPath -Force | Out-Null
