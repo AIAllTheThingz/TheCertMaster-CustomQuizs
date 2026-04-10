@@ -463,6 +463,13 @@ function Invoke-PublishPackage {
     return $latestZip.FullName
 }
 
+function Get-ScriptParameterNames {
+    param([string]$ScriptPath)
+
+    $command = Get-Command -Name $ScriptPath -CommandType ExternalScript -ErrorAction Stop
+    return @($command.Parameters.Keys)
+}
+
 function New-PostInstallReport {
     param(
         [string]$DestinationPath,
@@ -673,14 +680,13 @@ try {
 
 if (-not $SkipDeploy) {
     $deployScript = Join-Path $repoRoot "scripts\Deploy-IISProduction.ps1"
+    $deployScriptParameters = Get-ScriptParameterNames -ScriptPath $deployScript
     $deployParams = @{
         ZipPath = $deploymentZip
         SiteName = $SiteName
         SitePath = $SitePath
         HostName = $HostName
         AppPoolName = $AppPoolName
-        Protocol = $Protocol
-        Port = $Port
         ConnectionString = $ConnectionString
         JwtIssuer = $JwtIssuer
         JwtAudience = $JwtAudience
@@ -688,12 +694,24 @@ if (-not $SkipDeploy) {
         JwtAccessTokenMinutes = $JwtAccessTokenMinutes
     }
 
+    if ($deployScriptParameters -contains "Protocol") {
+        $deployParams.Protocol = $Protocol
+    }
+
+    if ($deployScriptParameters -contains "Port") {
+        $deployParams.Port = $Port
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
-        $deployParams.CertificateThumbprint = $CertificateThumbprint
+        if ($deployScriptParameters -contains "CertificateThumbprint") {
+            $deployParams.CertificateThumbprint = $CertificateThumbprint
+        }
     }
 
     if ($UseRootHttpsBinding) {
-        $deployParams.UseRootHttpsBinding = $true
+        if ($deployScriptParameters -contains "UseRootHttpsBinding") {
+            $deployParams.UseRootHttpsBinding = $true
+        }
     }
 
     Write-Step "Deploying the site to IIS"
