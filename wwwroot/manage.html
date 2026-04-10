@@ -27,7 +27,7 @@
         }
 
         .page {
-            max-width: 1240px;
+            max-width: 1280px;
             margin: 0 auto;
             padding: 28px 18px 40px;
         }
@@ -43,7 +43,7 @@
         }
 
 
-        form, #fileTable, #userManager, #smtpSettings, #quizSection, #questionEditorSection, #quizCreatorSection, #historySection, #preEmploymentSettings {
+        form, #fileTable, #userManager, #smtpSettings, #quizSection, #questionEditorSection, #quizCreatorSection, #historySection, #preEmploymentSettings, #apiReferenceSection {
             margin-bottom: 1.25rem;
             background: var(--panel);
             padding: 1.25rem;
@@ -135,6 +135,29 @@
             overflow-y: auto;
             overflow-x: hidden;
         }
+        .swaggerWrap {
+            margin-top: 1rem;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            overflow: hidden;
+            background: white;
+            box-shadow: var(--shadow);
+        }
+        .swaggerHead {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+        .swaggerFrame {
+            width: 100%;
+            height: 78vh;
+            border: 0;
+            background: white;
+        }
     </style>
 </head>
 <body>
@@ -145,7 +168,6 @@
         <a href="/user.html">User Page</a>
         <a href="/manage.html">Management Panel</a>
         <a href="/preemployment.html">Pre-Employment</a>
-        <a href="/api.html">API Tools</a>
     </nav>
     <h1>QuizAPI Management Panel</h1>
     <p class="topnav" style="margin-top: -0.2rem;">Manage quiz imports, users, reports, SMTP, and pre-employment configuration from this panel.</p>
@@ -316,6 +338,7 @@ const loginForm = document.getElementById("loginForm");
         let submissionSection = null;
         let questionEditorSection = null;
         let quizCreatorSection = null;
+        let apiReferenceSection = null;
         const smtpHost = document.getElementById("smtpHost");
         const smtpPort = document.getElementById("smtpPort");
         const smtpFromEmail = document.getElementById("smtpFromEmail");
@@ -396,6 +419,7 @@ const loginForm = document.getElementById("loginForm");
             submissionSection ??= document.getElementById("submissionSection");
             questionEditorSection ??= document.getElementById("questionEditorSection");
             quizCreatorSection ??= document.getElementById("quizCreatorSection");
+            apiReferenceSection ??= document.getElementById("apiReferenceSection");
         }
 
         function showAdminPanels() {
@@ -412,6 +436,7 @@ const loginForm = document.getElementById("loginForm");
             if (historySection) historySection.style.display = "block";
             if (reportingSection) reportingSection.style.display = "block";
             if (submissionSection) submissionSection.style.display = "block";
+            if (apiReferenceSection) apiReferenceSection.style.display = "block";
         }
 
         function hideAdminPanels() {
@@ -428,6 +453,7 @@ const loginForm = document.getElementById("loginForm");
             if (historySection) historySection.style.display = "none";
             if (reportingSection) reportingSection.style.display = "none";
             if (submissionSection) submissionSection.style.display = "none";
+            if (apiReferenceSection) apiReferenceSection.style.display = "none";
         }
 
 
@@ -2287,6 +2313,19 @@ document.addEventListener("DOMContentLoaded", () => {
         </thead>
         <tbody id="submissionTbody"></tbody>
     </table>
+</div>
+
+<div id="apiReferenceSection" style="display:none;">
+    <hr />
+    <h2>API Reference</h2>
+    <p class="muted">The production API tools now live under Management. Use the embedded Swagger reference below for the full authenticated API surface.</p>
+    <div class="swaggerWrap">
+        <div class="swaggerHead">
+            <strong>Swagger Reference</strong>
+            <a class="app-link" href="/swagger/index.html" target="_blank" rel="noreferrer">Open Swagger In New Tab</a>
+        </div>
+        <iframe class="swaggerFrame" src="/swagger/index.html" title="Swagger UI"></iframe>
+    </div>
 </div>
 </div>
 </body>
