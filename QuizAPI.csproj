@@ -12,18 +12,26 @@
     <Compile Remove="QuizAPI.Tests\**\*.cs" />
     <Compile Remove="OtherMigrations\**\*.cs" />
     <Compile Remove="TempPasswordReset\**\*.cs" />
+    <Compile Remove="publish\**\*" />
+    <Compile Remove="DeploymentBundle\**\*" />
     <Content Remove="QuizAPI_Source_Code\**" />
     <Content Remove="QuizAPI.Tests\**" />
     <Content Remove="OtherMigrations\**" />
     <Content Remove="TempPasswordReset\**" />
+    <Content Remove="publish\**" />
+    <Content Remove="DeploymentBundle\**" />
     <EmbeddedResource Remove="QuizAPI_Source_Code\**" />
     <EmbeddedResource Remove="QuizAPI.Tests\**" />
     <EmbeddedResource Remove="OtherMigrations\**" />
     <EmbeddedResource Remove="TempPasswordReset\**" />
+    <EmbeddedResource Remove="publish\**" />
+    <EmbeddedResource Remove="DeploymentBundle\**" />
     <None Remove="QuizAPI_Source_Code\**" />
     <None Remove="QuizAPI.Tests\**" />
     <None Remove="OtherMigrations\**" />
     <None Remove="TempPasswordReset\**" />
+    <None Remove="publish\**" />
+    <None Remove="DeploymentBundle\**" />
   </ItemGroup>
 
   <ItemGroup>
