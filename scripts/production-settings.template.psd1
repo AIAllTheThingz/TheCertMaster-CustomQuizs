@@ -21,6 +21,8 @@
 
     SqlInstance = '.\SQLEXPRESS'
     DatabaseName = 'QuizDB'
+    RestoreSeedDatabase = $true
+    DatabaseBackupPath = 'DeploymentBundle\QuizDB.bak'
 
     # Leave blank to let the installer build a local SQL Express connection string.
     ConnectionString = ''

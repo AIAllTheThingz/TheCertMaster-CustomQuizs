@@ -20,15 +20,24 @@ function Invoke-ApiRequest {
         [string]$Uri,
         [string]$Method = 'Get',
         [string]$ContentType = '',
-        [string]$Body = ''
+        [string]$Body = '',
+        [hashtable]$Headers = $null
     )
 
     try {
         if ([string]::IsNullOrWhiteSpace($ContentType)) {
-            return Invoke-RestMethod -Uri $Uri -Method $Method
+            if ($null -eq $Headers) {
+                return Invoke-RestMethod -Uri $Uri -Method $Method
+            }
+
+            return Invoke-RestMethod -Uri $Uri -Method $Method -Headers $Headers
         }
 
-        return Invoke-RestMethod -Uri $Uri -Method $Method -ContentType $ContentType -Body $Body
+        if ($null -eq $Headers) {
+            return Invoke-RestMethod -Uri $Uri -Method $Method -ContentType $ContentType -Body $Body
+        }
+
+        return Invoke-RestMethod -Uri $Uri -Method $Method -ContentType $ContentType -Body $Body -Headers $Headers
     }
     catch {
         $message = $_.Exception.Message
@@ -135,4 +144,13 @@ if ([string]::IsNullOrWhiteSpace($loginResponse.token)) {
     throw 'Admin login did not return a JWT token.'
 }
 
+Write-Step 'Checking quiz catalog'
+$quizHeaders = @{ Authorization = 'Bearer ' + $loginResponse.token }
+$quizResponse = Invoke-ApiRequest -Uri ($normalizedBaseUrl + '/api/quiz') -Method Get -Headers $quizHeaders
+$quizCount = @($quizResponse).Count
+if ($quizCount -lt 1) {
+    throw 'Quiz catalog check failed. No quizzes were returned after deployment.'
+}
+
+Write-Host "Quiz count: $quizCount" -ForegroundColor Green
 Write-Host 'Smoke test passed.' -ForegroundColor Green

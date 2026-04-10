@@ -19,6 +19,8 @@ param(
     [string]$ConnectionString = '',
     [string]$PublicBaseUrl = '',
     [Nullable[bool]]$EnableHttpsRedirection = $null,
+    [bool]$RestoreSeedDatabase = $true,
+    [string]$DatabaseBackupPath = '',
     [string]$JwtKey = '',
     [string]$JwtIssuer = 'QuizAPI',
     [string]$JwtAudience = 'QuizAPIUsers',
@@ -142,6 +144,118 @@ function Invoke-SqlQuery {
     & $sqlcmd -S $SqlInstance -d $Database -E -b -W -Q $Query
 }
 
+function Invoke-SqlQueryScalar {
+    param([string]$Query, [string]$Database = 'master')
+    $sqlcmd = Get-SqlCmdPath
+    $result = & $sqlcmd -S $SqlInstance -d $Database -E -b -W -h -1 -Q $Query
+    $text = ($result | Out-String).Trim()
+    foreach ($line in ($text -split "`r?`n")) {
+        $trimmed = $line.Trim()
+        if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+            return $trimmed
+        }
+    }
+
+    return ''
+}
+
+function Get-NormalizedBackupPath {
+    param([string]$PathValue, [string]$SourceRoot)
+
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        return Join-Path $SourceRoot 'DeploymentBundle\QuizDB.bak'
+    }
+
+    if ([System.IO.Path]::IsPathRooted($PathValue)) {
+        return $PathValue
+    }
+
+    return Join-Path $SourceRoot $PathValue
+}
+
+function Get-BackupFileList {
+    param([string]$BackupPath)
+
+    $escapedPath = $BackupPath.Replace("'", "''")
+    $query = "RESTORE FILELISTONLY FROM DISK = N'$escapedPath';"
+    $sqlcmd = Get-SqlCmdPath
+    $rows = & $sqlcmd -S $SqlInstance -d master -E -b -W -s '|' -h -1 -Q $query
+
+    $items = @()
+    foreach ($row in $rows) {
+        $text = $row.ToString().Trim()
+        if ([string]::IsNullOrWhiteSpace($text) -or $text -like 'Changed database context*') {
+            continue
+        }
+
+        $parts = $text -split '\|'
+        if ($parts.Count -lt 3) {
+            continue
+        }
+
+        $items += [pscustomobject]@{
+            LogicalName = $parts[0].Trim()
+            PhysicalName = $parts[1].Trim()
+            Type = $parts[2].Trim()
+        }
+    }
+
+    return $items
+}
+
+function Restore-DatabaseFromBackup {
+    param([string]$BackupPath)
+
+    if (-not (Test-Path -LiteralPath $BackupPath)) {
+        throw "Database backup file was not found: $BackupPath"
+    }
+
+    $dataPath = Invoke-SqlQueryScalar -Query "SET NOCOUNT ON; SELECT CONVERT(nvarchar(4000), SERVERPROPERTY('InstanceDefaultDataPath'));" -Database 'master'
+    $logPath = Invoke-SqlQueryScalar -Query "SET NOCOUNT ON; SELECT CONVERT(nvarchar(4000), SERVERPROPERTY('InstanceDefaultLogPath'));" -Database 'master'
+
+    if ([string]::IsNullOrWhiteSpace($dataPath) -or [string]::IsNullOrWhiteSpace($logPath)) {
+        throw 'Could not resolve SQL Server default data/log paths.'
+    }
+
+    $fileList = Get-BackupFileList -BackupPath $BackupPath
+    $dataFile = $fileList | Where-Object { $_.Type -eq 'D' } | Select-Object -First 1
+    $logFile = $fileList | Where-Object { $_.Type -eq 'L' } | Select-Object -First 1
+
+    if ($null -eq $dataFile -or $null -eq $logFile) {
+        throw "Backup file '$BackupPath' does not contain both data and log records."
+    }
+
+    $dataExtension = [System.IO.Path]::GetExtension($dataFile.PhysicalName)
+    $logExtension = [System.IO.Path]::GetExtension($logFile.PhysicalName)
+    if ([string]::IsNullOrWhiteSpace($dataExtension)) { $dataExtension = '.mdf' }
+    if ([string]::IsNullOrWhiteSpace($logExtension)) { $logExtension = '.ldf' }
+
+    $targetDataFile = Join-Path $dataPath ($DatabaseName + $dataExtension)
+    $targetLogFile = Join-Path $logPath ($DatabaseName + '_log' + $logExtension)
+
+    $escapedBackupPath = $BackupPath.Replace("'", "''")
+    $escapedDataLogical = $dataFile.LogicalName.Replace("'", "''")
+    $escapedLogLogical = $logFile.LogicalName.Replace("'", "''")
+    $escapedDataFile = $targetDataFile.Replace("'", "''")
+    $escapedLogFile = $targetLogFile.Replace("'", "''")
+
+    $query = @"
+IF DB_ID(N'$DatabaseName') IS NOT NULL
+BEGIN
+    ALTER DATABASE [$DatabaseName] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+END;
+RESTORE DATABASE [$DatabaseName]
+FROM DISK = N'$escapedBackupPath'
+WITH REPLACE,
+     RECOVERY,
+     MOVE N'$escapedDataLogical' TO N'$escapedDataFile',
+     MOVE N'$escapedLogLogical' TO N'$escapedLogFile';
+ALTER DATABASE [$DatabaseName] SET MULTI_USER;
+"@
+
+    Invoke-SqlQuery -Query $query -Database 'master' | Out-Host
+}
+
 function Ensure-AppPoolSqlAccess {
     $principal = "IIS APPPOOL\$AppPoolName"
     $query = @"
@@ -192,6 +306,21 @@ function Test-BootstrapAdminExists {
     return $false
 }
 
+function Test-QuizDataExists {
+    $query = "SET NOCOUNT ON; SELECT COUNT(1) AS QuizCount FROM [dbo].[Quizzes];"
+    $result = Invoke-SqlQuery -Query $query -Database $DatabaseName
+    $text = ($result | Out-String).Trim()
+
+    foreach ($line in ($text -split "`r?`n")) {
+        $trimmed = $line.Trim()
+        if ($trimmed -match '^\d+$') {
+            return ([int]$trimmed) -gt 0
+        }
+    }
+
+    return $false
+}
+
 function Resolve-Inputs {
     if ([string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
         $defaultBaseUrl = if ([string]::IsNullOrWhiteSpace($HostName)) { "http://localhost" } else { "${Protocol}://$HostName" }
@@ -205,6 +334,8 @@ function Resolve-Inputs {
     if ([string]::IsNullOrWhiteSpace($ConnectionString)) {
         $script:ConnectionString = Build-ConnectionString
     }
+
+    $script:DatabaseBackupPath = Get-NormalizedBackupPath -PathValue $DatabaseBackupPath -SourceRoot (Resolve-SourceRoot)
 
     if ($null -eq $EnableHttpsRedirection) {
         $script:EnableHttpsRedirection = ($Protocol -eq 'https')
@@ -233,6 +364,11 @@ $dotnetEfExe = Ensure-DotNetEfInstalled
 $publishScript = Join-Path $PSScriptRoot 'Publish-IISPackage.ps1'
 $deployScript = Join-Path $PSScriptRoot 'Deploy-IISProduction.ps1'
 $smokeTestScript = Join-Path $PSScriptRoot 'post-deploy-smoke-test.ps1'
+
+if ($RestoreSeedDatabase) {
+    Write-Step 'Restoring seeded QuizDB content from the repository backup'
+    Restore-DatabaseFromBackup -BackupPath $DatabaseBackupPath
+}
 
 Write-Step 'Running EF Core database migrations'
 $env:ASPNETCORE_ENVIRONMENT = 'Production'
@@ -266,6 +402,10 @@ finally {
 
 Write-Step 'Granting SQL access to the IIS app pool'
 Ensure-AppPoolSqlAccess
+
+if (-not (Test-QuizDataExists)) {
+    throw "No quizzes were found in database '$DatabaseName' after the repository restore and migration steps."
+}
 
 Write-Step 'Building deployment package'
 & $publishScript -Configuration 'Release'
@@ -326,3 +466,5 @@ Write-Host "Site path: $SitePath" -ForegroundColor Green
 Write-Host "Public base URL: $PublicBaseUrl" -ForegroundColor Green
 Write-Host "Bootstrap admin: $BootstrapAdminEmail" -ForegroundColor Green
 Write-Host "HTTPS redirection enabled: $EnableHttpsRedirection" -ForegroundColor Green
+Write-Host "Seed database restore enabled: $RestoreSeedDatabase" -ForegroundColor Green
+Write-Host "Seed database backup path: $DatabaseBackupPath" -ForegroundColor Green
