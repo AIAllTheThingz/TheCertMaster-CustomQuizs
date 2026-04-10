@@ -158,7 +158,7 @@ END;
 
 function Resolve-Inputs {
     if ([string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
-        $defaultBaseUrl = if ([string]::IsNullOrWhiteSpace($HostName)) { "http://localhost" } else { "$Protocol://$HostName" }
+        $defaultBaseUrl = if ([string]::IsNullOrWhiteSpace($HostName)) { "http://localhost" } else { "${Protocol}://$HostName" }
         $script:PublicBaseUrl = Read-HostWithDefault -Prompt 'Public base URL' -DefaultValue $defaultBaseUrl
     }
 
