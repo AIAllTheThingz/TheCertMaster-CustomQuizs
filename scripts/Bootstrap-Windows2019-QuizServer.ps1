@@ -450,7 +450,7 @@ function Invoke-PublishPackage {
         $publishParams.SkipTests = $true
     }
 
-    & $publishScript @publishParams
+    & $publishScript @publishParams | Out-Host
 
     $latestZip = Get-ChildItem -Path (Join-Path $RepoRoot "DeploymentBundle") -Filter "QuizAPI_IIS_Production_*.zip" |
         Sort-Object LastWriteTimeUtc -Descending |
