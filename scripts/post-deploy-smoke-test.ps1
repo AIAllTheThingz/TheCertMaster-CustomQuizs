@@ -48,13 +48,18 @@ function Invoke-ApiRequest {
 function Wait-ForHealthEndpoint {
     param(
         [string]$Uri,
+        [hashtable]$Headers = $null,
         [int]$TimeoutSeconds = 60
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         try {
-            return Invoke-RestMethod -Uri $Uri -Method Get
+            if ($null -eq $Headers) {
+                return Invoke-RestMethod -Uri $Uri -Method Get
+            }
+
+            return Invoke-RestMethod -Uri $Uri -Method Get -Headers $Headers
         }
         catch {
             Start-Sleep -Seconds 2
@@ -125,11 +130,30 @@ $normalizedBaseUrl = $BaseUrl.TrimEnd('/')
 
 Write-Step 'Checking health endpoint'
 $healthUri = $normalizedBaseUrl + '/health'
+$baseUri = [Uri]$normalizedBaseUrl
+$health = $null
+
 try {
     $health = Wait-ForHealthEndpoint -Uri $healthUri
 }
 catch {
-    Write-StartupDiagnostics -BaseUrlToUse $normalizedBaseUrl
+    if ($baseUri.Host -notin @('localhost', '127.0.0.1', '::1')) {
+        Write-Host "Primary health check failed for $healthUri. Retrying via loopback with Host header '$($baseUri.Host)'." -ForegroundColor Yellow
+        $loopbackBaseUrl = '{0}://127.0.0.1{1}' -f $baseUri.Scheme, $(if ($baseUri.IsDefaultPort) { '' } else { ':' + $baseUri.Port })
+        $loopbackHealthUri = $loopbackBaseUrl.TrimEnd('/') + '/health'
+
+        try {
+            $health = Wait-ForHealthEndpoint -Uri $loopbackHealthUri -Headers @{ Host = $baseUri.Host } -TimeoutSeconds 30
+            $normalizedBaseUrl = $loopbackBaseUrl
+            Write-Host "Loopback health check succeeded using Host header '$($baseUri.Host)'." -ForegroundColor Green
+        }
+        catch {
+            Write-StartupDiagnostics -BaseUrlToUse $normalizedBaseUrl
+        }
+    }
+    else {
+        Write-StartupDiagnostics -BaseUrlToUse $normalizedBaseUrl
+    }
 }
 Write-Host "Health response: $health" -ForegroundColor Green
 
@@ -139,13 +163,21 @@ $loginBody = @{
     password = $AdminPassword
 } | ConvertTo-Json
 
-$loginResponse = Invoke-ApiRequest -Uri ($normalizedBaseUrl + '/api/auth/login') -Method Post -ContentType 'application/json' -Body $loginBody
+$requestHeaders = $null
+if ($baseUri.Host -notin @('localhost', '127.0.0.1', '::1') -and $normalizedBaseUrl -like 'http://127.0.0.1*') {
+    $requestHeaders = @{ Host = $baseUri.Host }
+}
+
+$loginResponse = Invoke-ApiRequest -Uri ($normalizedBaseUrl + '/api/auth/login') -Method Post -ContentType 'application/json' -Body $loginBody -Headers $requestHeaders
 if ([string]::IsNullOrWhiteSpace($loginResponse.token)) {
     throw 'Admin login did not return a JWT token.'
 }
 
 Write-Step 'Checking quiz catalog'
 $quizHeaders = @{ Authorization = 'Bearer ' + $loginResponse.token }
+if ($null -ne $requestHeaders -and $requestHeaders.ContainsKey('Host')) {
+    $quizHeaders['Host'] = $requestHeaders['Host']
+}
 $quizResponse = Invoke-ApiRequest -Uri ($normalizedBaseUrl + '/api/quiz') -Method Get -Headers $quizHeaders
 $quizCount = @($quizResponse).Count
 if ($quizCount -lt 1) {
