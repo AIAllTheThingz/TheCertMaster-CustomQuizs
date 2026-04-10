@@ -96,11 +96,17 @@ Import-Module WebAdministration
 
 Write-Step "Stopping IIS site and app pool for deployment"
 if (Test-Path "IIS:\Sites\$SiteName") {
-    Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
+    $siteState = (Get-Website -Name $SiteName).State
+    if ($siteState -eq "Started") {
+        Stop-Website -Name $SiteName
+    }
 }
 
 if (Test-Path "IIS:\AppPools\$AppPoolName") {
-    Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+    $appPoolState = (Get-WebAppPoolState -Name $AppPoolName).Value
+    if ($appPoolState -eq "Started") {
+        Stop-WebAppPool -Name $AppPoolName
+    }
 }
 
 Write-Step "Ensuring deployment path exists"
