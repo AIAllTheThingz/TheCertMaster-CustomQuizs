@@ -481,7 +481,7 @@ const loginForm = document.getElementById("loginForm");
                     return;
                 }
 
-                const data = await res.json();
+                const data = await readJsonNormalized(res);
                 token = data.token;
                 localStorage.setItem("jwtToken", token);
 
@@ -674,7 +674,7 @@ const loginForm = document.getElementById("loginForm");
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 if (!res.ok) return;
-                cachedUsers = await res.json();
+                cachedUsers = await readJsonNormalized(res);
                 renderUsers(cachedUsers);
             } catch (err) { console.error(err); }
         }
@@ -693,7 +693,7 @@ const loginForm = document.getElementById("loginForm");
                     smtpStatus.textContent = 'Failed to load SMTP: ' + t;
                     return;
                 }
-                const s = await res.json();
+                const s = await readJsonNormalized(res);
                 smtpHost.value = s.host ?? '';
                 smtpPort.value = s.port ?? 25;
                 smtpFromEmail.value = s.fromEmail ?? '';
@@ -1534,7 +1534,7 @@ async function loadPreEmploymentConfig() {
             return;
         }
 
-        const cfg = await res.json();
+        const cfg = await readJsonNormalized(res);
         preEmploymentTitle.value = cfg.title || "Pre-Employment Quiz";
         preEmploymentQuestionCount.value = cfg.questionCount || 20;
         preEmploymentTimeLimit.value = cfg.timeLimitMinutes || 0;
@@ -1601,7 +1601,7 @@ async function savePreEmploymentConfig() {
             return;
         }
 
-        const saved = await res.json();
+        const saved = await readJsonNormalized(res);
         preEmploymentQuestionCount.value = saved.questionCount || payload.questionCount;
         const savedTitles = Array.isArray(saved.quizTitles) && saved.quizTitles.length
             ? saved.quizTitles
@@ -1639,7 +1639,7 @@ async function loadImportHistory() {
             return;
         }
 
-        const runs = await res.json();
+        const runs = await readJsonNormalized(res);
 
         if (!Array.isArray(runs) || runs.length === 0) {
             historyStatus.textContent = "No import history yet.";
@@ -1697,20 +1697,20 @@ async function loadUsageReport() {
             return;
         }
 
-        const data = await res.json();
-        const usageRows = Array.isArray(data.mostTakenQuizzes || data.MostTakenQuizzes) ? (data.mostTakenQuizzes || data.MostTakenQuizzes) : [];
-        const recentRows = Array.isArray(data.recentAttempts || data.RecentAttempts) ? (data.recentAttempts || data.RecentAttempts) : [];
-        usageSummary.textContent = `Total attempts: ${data.totalAttempts ?? data.TotalAttempts ?? 0} | Unique users: ${data.uniqueUsers ?? data.UniqueUsers ?? 0}`;
+        const data = await readJsonNormalized(res);
+        const usageRows = Array.isArray(data.mostTakenQuizzes) ? data.mostTakenQuizzes : [];
+        const recentRows = Array.isArray(data.recentAttempts) ? data.recentAttempts : [];
+        usageSummary.textContent = `Total attempts: ${data.totalAttempts ?? 0} | Unique users: ${data.uniqueUsers ?? 0}`;
         usageStatus.textContent = usageRows.length ? "Usage report loaded." : "No quiz attempts recorded yet.";
 
         for (const item of usageRows) {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.quizTitle || item.QuizTitle || "")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.quizCategory || item.QuizCategory || "")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.attemptCount ?? item.AttemptCount ?? 0)}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.averageScorePercent ?? item.AverageScorePercent ?? 0)}%</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(item.lastAttemptUtc || item.LastAttemptUtc))}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.quizTitle || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.quizCategory || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.attemptCount ?? 0)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(item.averageScorePercent ?? 0)}%</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(item.lastAttemptUtc))}</td>
             `;
             usageTbody.appendChild(tr);
         }
@@ -1718,11 +1718,11 @@ async function loadUsageReport() {
         for (const row of recentRows) {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.userName || row.UserName || "(not set)")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.userEmail || row.UserEmail || "")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.quizTitle || row.QuizTitle || "")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.scorePercent ?? row.ScorePercent ?? 0)}% (${escapeHtml(row.correctCount ?? row.CorrectCount ?? 0)} / ${escapeHtml(row.totalQuestions ?? row.TotalQuestions ?? 0)})</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(row.submittedUtc || row.SubmittedUtc))}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.userName || "(not set)")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.userEmail || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.quizTitle || "")}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.scorePercent ?? 0)}% (${escapeHtml(row.correctCount ?? 0)} / ${escapeHtml(row.totalQuestions ?? 0)})</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(row.submittedUtc))}</td>
             `;
             recentAttemptsTbody.appendChild(tr);
         }
@@ -1751,7 +1751,7 @@ async function loadPreEmploymentSubmissions() {
             return;
         }
 
-        const rows = await res.json();
+        const rows = await readJsonNormalized(res);
         if (!Array.isArray(rows) || rows.length === 0) {
             submissionStatus.textContent = "No pre-employment submissions yet.";
             return;
@@ -1759,14 +1759,24 @@ async function loadPreEmploymentSubmissions() {
 
         submissionStatus.textContent = `Loaded ${rows.length} submission(s).`;
         for (const row of rows) {
-            const candidate = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || "(not provided)";
+            const firstName = row.FirstName ?? row.firstName ?? "";
+            const lastName = row.LastName ?? row.lastName ?? "";
+            const quizTitle = row.QuizTitle ?? row.quizTitle ?? "";
+            const sourceQuizTitles = row.SourceQuizTitles ?? row.sourceQuizTitles ?? "";
+            const scorePercent = row.ScorePercent ?? row.scorePercent ?? 0;
+            const correctCount = row.CorrectCount ?? row.correctCount ?? 0;
+            const totalQuestions = row.TotalQuestions ?? row.totalQuestions ?? 0;
+            const passed = row.Passed ?? row.passed ?? false;
+            const passingScorePercent = row.PassingScorePercent ?? row.passingScorePercent ?? 0;
+            const submittedUtc = row.SubmittedUtc ?? row.submittedUtc ?? "";
+            const candidate = [firstName, lastName].filter(Boolean).join(" ").trim() || "(not provided)";
             const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(candidate)}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.quizTitle || "")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.sourceQuizTitles || "")}</td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(row.scorePercent || 0)}% (${escapeHtml(row.correctCount || 0)} / ${escapeHtml(row.totalQuestions || 0)})<br /><span class="muted">${escapeHtml(row.passed ? "Passed" : "Did not meet threshold")} at ${escapeHtml(row.passingScorePercent || 0)}%</span></td>
-                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(row.submittedUtc))}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(quizTitle)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(sourceQuizTitles)}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(scorePercent)}% (${escapeHtml(correctCount)} / ${escapeHtml(totalQuestions)})<br /><span class="muted">${escapeHtml(passed ? "Passed" : "Did not meet threshold")} at ${escapeHtml(passingScorePercent)}%</span></td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">${escapeHtml(formatUtc(submittedUtc))}</td>
                 <td style="padding:6px; border-bottom:1px solid #eee;"><button type="button" data-submission="${encodeURIComponent(JSON.stringify(row))}">Print summary</button></td>
             `;
             submissionTbody.appendChild(tr);
@@ -1967,13 +1977,13 @@ function wireDashboardButtonsOnce() {
                     <html><head><title>Candidate Completion Summary</title></head>
                     <body style="font-family:Segoe UI,Tahoma,sans-serif;padding:32px;color:#17324d;">
                         <h1>Candidate Completion Summary</h1>
-                        <p><strong>Candidate:</strong> ${escapeHtml([row.firstName, row.lastName].filter(Boolean).join(" ").trim() || "(not provided)")}</p>
-                        <p><strong>Configured Quiz:</strong> ${escapeHtml(row.quizTitle || "")}</p>
-                        <p><strong>Source Exams:</strong> ${escapeHtml(row.sourceQuizTitles || "")}</p>
-                        <p><strong>Score:</strong> ${escapeHtml(row.scorePercent || 0)}% (${escapeHtml(row.correctCount || 0)} / ${escapeHtml(row.totalQuestions || 0)})</p>
-                        <p><strong>Threshold:</strong> ${escapeHtml(row.passingScorePercent || 0)}%</p>
-                        <p><strong>Outcome:</strong> ${escapeHtml(row.passed ? "Passed" : "Did not meet threshold")}</p>
-                        <p><strong>Submitted:</strong> ${escapeHtml(formatUtc(row.submittedUtc))}</p>
+                        <p><strong>Candidate:</strong> ${escapeHtml([row.FirstName ?? row.firstName, row.LastName ?? row.lastName].filter(Boolean).join(" ").trim() || "(not provided)")}</p>
+                        <p><strong>Configured Quiz:</strong> ${escapeHtml(row.QuizTitle ?? row.quizTitle ?? "")}</p>
+                        <p><strong>Source Exams:</strong> ${escapeHtml(row.SourceQuizTitles ?? row.sourceQuizTitles ?? "")}</p>
+                        <p><strong>Score:</strong> ${escapeHtml(row.ScorePercent ?? row.scorePercent ?? 0)}% (${escapeHtml(row.CorrectCount ?? row.correctCount ?? 0)} / ${escapeHtml(row.TotalQuestions ?? row.totalQuestions ?? 0)})</p>
+                        <p><strong>Threshold:</strong> ${escapeHtml(row.PassingScorePercent ?? row.passingScorePercent ?? 0)}%</p>
+                        <p><strong>Outcome:</strong> ${escapeHtml((row.Passed ?? row.passed) ? "Passed" : "Did not meet threshold")}</p>
+                        <p><strong>Submitted:</strong> ${escapeHtml(formatUtc(row.SubmittedUtc ?? row.submittedUtc))}</p>
                         <script>window.print();<\/script>
                     </body></html>
                 `);

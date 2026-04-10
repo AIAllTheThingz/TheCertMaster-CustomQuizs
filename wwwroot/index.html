@@ -355,6 +355,32 @@
 
         let quizzes = [];
 
+        function toCamelKey(key) {
+            if (!key || typeof key !== 'string') return key;
+            return key.length === 1 ? key.toLowerCase() : (key[0].toLowerCase() + key.slice(1));
+        }
+
+        function normalizeKeys(value) {
+            if (Array.isArray(value)) {
+                return value.map(normalizeKeys);
+            }
+
+            if (value && typeof value === 'object') {
+                const normalized = {};
+                for (const [key, item] of Object.entries(value)) {
+                    normalized[toCamelKey(key)] = normalizeKeys(item);
+                }
+                return normalized;
+            }
+
+            return value;
+        }
+
+        async function readJsonNormalized(res) {
+            const json = await res.json();
+            return normalizeKeys(json);
+        }
+
         function setStatus(message) {
             status.textContent = message || '';
         }
@@ -390,10 +416,10 @@
                     return;
                 }
 
-                const profile = await res.json();
-                const firstName = profile.FirstName || profile.firstName || '';
-                const lastName = profile.LastName || profile.lastName || '';
-                const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.UserName || profile.userName || profile.Email || profile.email || 'User';
+                const profile = await readJsonNormalized(res);
+                const firstName = profile.firstName || '';
+                const lastName = profile.lastName || '';
+                const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.userName || profile.email || 'User';
 
                 accountStatus.textContent = 'Logged in as ' + displayName;
                 createAccountLink.style.display = 'none';
@@ -411,7 +437,7 @@
                 const res = await fetch('/api/quiz');
                 if (!res.ok) throw new Error('Failed to load quizzes.');
 
-                quizzes = await res.json();
+                quizzes = await readJsonNormalized(res);
                 renderQuizList();
                 updateSelectionSummary();
                 setStatus(quizzes.length ? 'Select one or more quizzes to build your question pool.' : 'No quizzes are available yet.');
@@ -434,10 +460,10 @@
             }
 
             for (const quiz of quizzes) {
-                const id = quiz.Id || quiz.id;
-                const title = quiz.Title || quiz.title || '(untitled)';
-                const category = quiz.Category || quiz.category || 'Uncategorized';
-                const count = Number(quiz.QuestionCount ?? quiz.questionCount ?? 0);
+                const id = quiz.id;
+                const title = quiz.title || '(untitled)';
+                const category = quiz.category || 'Uncategorized';
+                const count = Number(quiz.questionCount ?? 0);
 
                 const label = document.createElement('label');
                 label.className = 'quizItem';
