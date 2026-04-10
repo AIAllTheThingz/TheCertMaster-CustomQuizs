@@ -9,6 +9,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptRoot
 
 function Write-Step {
     param([string]$Message)
@@ -18,7 +20,12 @@ function Write-Step {
 
 function Resolve-AbsolutePath {
     param([string]$Path)
-    return [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
 }
 
 $projectFullPath = Resolve-AbsolutePath -Path $ProjectPath
