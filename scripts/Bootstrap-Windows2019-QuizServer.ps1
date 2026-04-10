@@ -148,13 +148,40 @@ function Get-DotNetInstallerAsset {
 
     switch ($AssetType) {
         "sdk" {
-            $asset = $latestRelease.sdk.files |
-                Where-Object { $_.rid -eq "win-x64" -and $_.name -like "dotnet-sdk-*-win-x64.exe" } |
-                Select-Object -First 1
+            $sdkFileSets = @()
+
+            if ($null -ne $latestRelease.sdk -and $null -ne $latestRelease.sdk.files) {
+                $sdkFileSets += ,$latestRelease.sdk.files
+            }
+
+            if ($null -ne $latestRelease.sdks) {
+                foreach ($sdkEntry in @($latestRelease.sdks)) {
+                    if ($null -ne $sdkEntry -and $null -ne $sdkEntry.files) {
+                        $sdkFileSets += ,$sdkEntry.files
+                    }
+                }
+            }
+
+            foreach ($fileSet in $sdkFileSets) {
+                $asset = @($fileSet) |
+                    Where-Object {
+                        $_.rid -eq "win-x64" -and
+                        $_.url -like "*.exe" -and
+                        ($_.name -like "dotnet-sdk-*-win-x64.exe" -or $_.name -like "dotnet-sdk-win-x64.exe")
+                    } |
+                    Select-Object -First 1
+
+                if ($null -ne $asset) {
+                    break
+                }
+            }
         }
         "hosting" {
-            $asset = $latestRelease.'aspnetcore-runtime'.files |
-                Where-Object { $_.name -eq "dotnet-hosting-win.exe" } |
+            $asset = @($latestRelease.'aspnetcore-runtime'.files) |
+                Where-Object {
+                    $_.name -eq "dotnet-hosting-win.exe" -or
+                    $_.url -like "*dotnet-hosting*-win.exe"
+                } |
                 Select-Object -First 1
         }
     }
