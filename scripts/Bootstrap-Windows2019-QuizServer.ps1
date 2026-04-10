@@ -1,0 +1,623 @@
+[CmdletBinding()]
+param(
+    [string]$DownloadsRoot = "C:\Deploy\downloads",
+    [string]$WorkspaceRoot = "C:\src",
+    [string]$LogRoot = "C:\Deploy\logs",
+    [string]$RepoZipUrl = "https://github.com/AIAllTheThingz/TheCertMaster-CustomQuizs/archive/refs/heads/main.zip",
+    [string]$RepoFolderName = "TheCertMaster-CustomQuizs",
+    [string]$Configuration = "Release",
+    [string]$SiteName = "QuizAPI",
+    [string]$SitePath = "C:\sites\QuizAPI\current",
+    [string]$HostName = "",
+    [ValidateSet("http", "https")]
+    [string]$Protocol = "http",
+    [int]$Port = 80,
+    [string]$AppPoolName = "QuizAppPool",
+    [string]$ConnectionString = "Server=.\SQLEXPRESS;Database=QuizDB;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;",
+    [string]$JwtIssuer = "QuizAPI",
+    [string]$JwtAudience = "QuizAPIUsers",
+    [string]$JwtKey,
+    [int]$JwtAccessTokenMinutes = 60,
+    [string]$CertificateThumbprint = "",
+    [switch]$UseRootHttpsBinding,
+    [string]$DotNetChannel = "9.0",
+    [string]$SqlExpressDownloadUrl = "https://go.microsoft.com/fwlink/?linkid=866658",
+    [string]$SqlInstanceName = "SQLEXPRESS",
+    [switch]$SkipIisInstall,
+    [switch]$SkipSqlExpressInstall,
+    [switch]$SkipHostingBundleInstall,
+    [switch]$SkipDotNetSdkInstall,
+    [switch]$SkipSourceDownload,
+    [switch]$SkipTests,
+    [switch]$SkipDatabaseUpdate,
+    [switch]$SkipDeploy,
+    [string]$ReportPath = ""
+)
+
+$ErrorActionPreference = "Stop"
+
+function Write-Step {
+    param([string]$Message)
+    Write-Host ""
+    Write-Host "==> $Message" -ForegroundColor Cyan
+}
+
+function Ensure-RunningAsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "This script must be run from an elevated PowerShell session."
+    }
+}
+
+function Ensure-Directory {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    }
+}
+
+function Get-Timestamp {
+    return Get-Date -Format "yyyyMMdd_HHmmss"
+}
+
+function Download-File {
+    param(
+        [string]$Url,
+        [string]$DestinationPath
+    )
+
+    Write-Host "Downloading $Url" -ForegroundColor DarkGray
+    Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -UseBasicParsing
+}
+
+function Invoke-ProcessChecked {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
+        [string]$StepName
+    )
+
+    Write-Host "$FilePath $($ArgumentList -join ' ')" -ForegroundColor DarkGray
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -ne 0) {
+        throw "$StepName failed with exit code $($process.ExitCode)."
+    }
+}
+
+function Get-InstalledProductDisplayNames {
+    $paths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+
+    return Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_.DisplayName) } |
+        Select-Object -ExpandProperty DisplayName
+}
+
+function Get-DotNetReleaseMetadata {
+    param([string]$Channel)
+
+    $indexUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
+    $index = Invoke-RestMethod -Uri $indexUrl
+    $channelEntry = $index.'releases-index' | Where-Object { $_.'channel-version' -eq $Channel } | Select-Object -First 1
+
+    if ($null -eq $channelEntry) {
+        throw "Could not find .NET release metadata for channel '$Channel'."
+    }
+
+    return Invoke-RestMethod -Uri $channelEntry.'releases.json'
+}
+
+function Get-DotNetInstallerAsset {
+    param(
+        [object]$ReleaseMetadata,
+        [ValidateSet("sdk", "hosting")]
+        [string]$AssetType
+    )
+
+    $latestRelease = $ReleaseMetadata.releases | Select-Object -First 1
+
+    switch ($AssetType) {
+        "sdk" {
+            $asset = $latestRelease.sdk.files |
+                Where-Object { $_.rid -eq "win-x64" -and $_.name -like "dotnet-sdk-*-win-x64.exe" } |
+                Select-Object -First 1
+        }
+        "hosting" {
+            $asset = $latestRelease.'aspnetcore-runtime'.files |
+                Where-Object { $_.name -eq "dotnet-hosting-win.exe" } |
+                Select-Object -First 1
+        }
+    }
+
+    if ($null -eq $asset) {
+        throw "Could not find .NET $AssetType installer asset."
+    }
+
+    return $asset
+}
+
+function Test-DotNetSdkInstalled {
+    param([string]$Channel)
+
+    try {
+        $sdks = & dotnet --list-sdks 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            return $false
+        }
+    }
+    catch {
+        return $false
+    }
+
+    return $sdks | Where-Object { $_ -match "^$([regex]::Escape($Channel))\." } | Select-Object -First 1
+}
+
+function Test-HostingBundleInstalled {
+    param([string]$Channel)
+
+    $productNames = Get-InstalledProductDisplayNames
+    return $productNames | Where-Object { $_ -like "Microsoft ASP.NET Core * Hosting Bundle*" -and $_ -like "*$Channel*" } | Select-Object -First 1
+}
+
+function Test-SqlExpressInstalled {
+    param([string]$InstanceName)
+
+    return Get-Service -Name "MSSQL`$$InstanceName" -ErrorAction SilentlyContinue
+}
+
+function Install-IisRoleServices {
+    Write-Step "Installing IIS and required Windows features"
+
+    $featureNames = @(
+        "Web-Server",
+        "Web-Default-Doc",
+        "Web-Static-Content",
+        "Web-Http-Errors",
+        "Web-Http-Logging",
+        "Web-Stat-Compression",
+        "Web-Filtering",
+        "Web-Http-Redirect",
+        "Web-Health",
+        "Web-Performance",
+        "Web-Security",
+        "Web-Windows-Auth",
+        "Web-App-Dev",
+        "Web-Net-Ext45",
+        "Web-Asp-Net45",
+        "Web-Mgmt-Tools",
+        "Web-Mgmt-Console"
+    )
+
+    $result = Install-WindowsFeature -Name $featureNames -IncludeManagementTools
+    if (-not $result.Success) {
+        throw "Install-WindowsFeature reported failure while installing IIS features."
+    }
+}
+
+function Install-DotNetSdk {
+    param(
+        [object]$ReleaseMetadata,
+        [string]$DestinationRoot
+    )
+
+    if (Test-DotNetSdkInstalled -Channel $DotNetChannel) {
+        Write-Step ".NET SDK $DotNetChannel is already installed"
+        return
+    }
+
+    $asset = Get-DotNetInstallerAsset -ReleaseMetadata $ReleaseMetadata -AssetType "sdk"
+    $installerPath = Join-Path $DestinationRoot ([IO.Path]::GetFileName($asset.url))
+
+    Write-Step "Installing .NET SDK for channel $DotNetChannel"
+    Download-File -Url $asset.url -DestinationPath $installerPath
+    Invoke-ProcessChecked -FilePath $installerPath -ArgumentList @("/install", "/quiet", "/norestart") -StepName ".NET SDK installation"
+}
+
+function Install-HostingBundle {
+    param(
+        [object]$ReleaseMetadata,
+        [string]$DestinationRoot
+    )
+
+    if (Test-HostingBundleInstalled -Channel $DotNetChannel) {
+        Write-Step "ASP.NET Core Hosting Bundle $DotNetChannel is already installed"
+        return
+    }
+
+    $asset = Get-DotNetInstallerAsset -ReleaseMetadata $ReleaseMetadata -AssetType "hosting"
+    $installerPath = Join-Path $DestinationRoot ([IO.Path]::GetFileName($asset.url))
+
+    Write-Step "Installing ASP.NET Core Hosting Bundle for channel $DotNetChannel"
+    Download-File -Url $asset.url -DestinationPath $installerPath
+    Invoke-ProcessChecked -FilePath $installerPath -ArgumentList @("/install", "/quiet", "/norestart", "OPT_NO_X86=1") -StepName "ASP.NET Core Hosting Bundle installation"
+}
+
+function Install-SqlExpress {
+    param(
+        [string]$DestinationRoot,
+        [string]$InstanceName,
+        [string]$DownloadUrl
+    )
+
+    if (Test-SqlExpressInstalled -InstanceName $InstanceName) {
+        Write-Step "SQL Server Express instance '$InstanceName' is already installed"
+        return
+    }
+
+    $installerPath = Join-Path $DestinationRoot "SQLEXPR_x64_ENU.exe"
+    Write-Step "Installing SQL Server Express 2019 instance '$InstanceName'"
+    Download-File -Url $DownloadUrl -DestinationPath $installerPath
+
+    $arguments = @(
+        "/Q",
+        "/ACTION=Install",
+        "/FEATURES=SQLEngine",
+        "/INSTANCENAME=$InstanceName",
+        "/SQLSVCSTARTUPTYPE=Automatic",
+        "/SQLSVCACCOUNT=""NT AUTHORITY\NETWORK SERVICE""",
+        "/SQLSYSADMINACCOUNTS=""BUILTIN\Administrators""",
+        "/TCPENABLED=1",
+        "/NPENABLED=0",
+        "/IACCEPTSQLSERVERLICENSETERMS"
+    )
+
+    Invoke-ProcessChecked -FilePath $installerPath -ArgumentList $arguments -StepName "SQL Server Express installation"
+}
+
+function Expand-RepoZip {
+    param(
+        [string]$ZipUrl,
+        [string]$DestinationRoot,
+        [string]$FolderName,
+        [string]$DownloadRoot
+    )
+
+    $zipPath = Join-Path $DownloadRoot "$FolderName-main.zip"
+    $extractRoot = Join-Path $DestinationRoot "$FolderName-main"
+    $targetRoot = Join-Path $DestinationRoot $FolderName
+
+    if (Test-Path -LiteralPath $extractRoot) {
+        Remove-Item -LiteralPath $extractRoot -Recurse -Force
+    }
+
+    if (Test-Path -LiteralPath $targetRoot) {
+        Remove-Item -LiteralPath $targetRoot -Recurse -Force
+    }
+
+    Write-Step "Downloading repository source"
+    Download-File -Url $ZipUrl -DestinationPath $zipPath
+
+    Write-Step "Extracting repository source"
+    Expand-Archive -Path $zipPath -DestinationPath $DestinationRoot -Force
+    Move-Item -Path $extractRoot -Destination $targetRoot -Force
+
+    return $targetRoot
+}
+
+function Ensure-DotNetEfInstalled {
+    $toolsDir = Join-Path $env:USERPROFILE ".dotnet\tools"
+    $dotnetEfPath = Join-Path $toolsDir "dotnet-ef.exe"
+
+    if (-not (Test-Path -LiteralPath $dotnetEfPath)) {
+        Write-Step "Installing dotnet-ef"
+        Invoke-ProcessChecked -FilePath "dotnet" -ArgumentList @("tool", "install", "--global", "dotnet-ef", "--version", "9.*") -StepName "dotnet-ef installation"
+    }
+
+    if ($env:PATH -notlike "*$toolsDir*") {
+        $env:PATH = "$toolsDir;$env:PATH"
+    }
+
+    return $dotnetEfPath
+}
+
+function Invoke-DatabaseUpdate {
+    param(
+        [string]$RepoRoot,
+        [string]$Connection
+    )
+
+    $dotnetEfPath = Ensure-DotNetEfInstalled
+    $projectPath = Join-Path $RepoRoot "QuizAPI.csproj"
+
+    Write-Step "Applying EF Core migrations to the target database"
+    $env:ConnectionStrings__DefaultConnection = $Connection
+    try {
+        Invoke-ProcessChecked -FilePath $dotnetEfPath -ArgumentList @(
+            "database",
+            "update",
+            "--project", $projectPath,
+            "--startup-project", $projectPath
+        ) -StepName "EF Core database update"
+    }
+    finally {
+        Remove-Item Env:\ConnectionStrings__DefaultConnection -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-PublishPackage {
+    param(
+        [string]$RepoRoot,
+        [string]$BuildConfiguration,
+        [switch]$OmitTests
+    )
+
+    $publishScript = Join-Path $RepoRoot "scripts\Publish-IISPackage.ps1"
+    $arguments = @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $publishScript,
+        "-Configuration", $BuildConfiguration
+    )
+
+    if ($OmitTests) {
+        $arguments += "-SkipTests"
+    }
+
+    Write-Step "Building and packaging the application"
+    Invoke-ProcessChecked -FilePath "powershell.exe" -ArgumentList $arguments -StepName "IIS package publish"
+
+    $latestZip = Get-ChildItem -Path (Join-Path $RepoRoot "DeploymentBundle") -Filter "QuizAPI_IIS_Production_*.zip" |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+
+    if ($null -eq $latestZip) {
+        throw "Publish step completed but no deployment bundle was found."
+    }
+
+    return $latestZip.FullName
+}
+
+function New-PostInstallReport {
+    param(
+        [string]$DestinationPath,
+        [string]$RepoRoot,
+        [string]$DeploymentZip,
+        [string]$TranscriptPath,
+        [string]$ApplicationUrl
+    )
+
+    $sqlService = Get-Service -Name "MSSQL`$$SqlInstanceName" -ErrorAction SilentlyContinue
+    $sdkList = @()
+    $runtimeList = @()
+
+    try {
+        $sdkList = & dotnet --list-sdks 2>$null
+        $runtimeList = & dotnet --list-runtimes 2>$null
+    }
+    catch {
+    }
+
+    $siteSummary = $null
+    if (Get-Module -ListAvailable -Name WebAdministration) {
+        try {
+            Import-Module WebAdministration -ErrorAction Stop
+            if (Test-Path "IIS:\Sites\$SiteName") {
+                $siteItem = Get-Item "IIS:\Sites\$SiteName"
+                $bindings = Get-WebBinding -Name $SiteName | ForEach-Object {
+                    "- {0}" -f $_.bindingInformation
+                }
+
+                $siteSummary = @{
+                    Name = $SiteName
+                    PhysicalPath = $siteItem.physicalPath
+                    ApplicationPool = $siteItem.applicationPool
+                    Bindings = $bindings
+                }
+            }
+        }
+        catch {
+        }
+    }
+
+    $reportLines = @(
+        "# TheCertMaster Bootstrap Report",
+        "",
+        "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')",
+        "Machine: $env:COMPUTERNAME",
+        "User: $env:USERDOMAIN\$env:USERNAME",
+        "",
+        "## Result",
+        "",
+        "- Protocol: $Protocol",
+        "- Port: $Port",
+        "- HostName: $(if ([string]::IsNullOrWhiteSpace($HostName)) { 'localhost' } else { $HostName })",
+        "- Application URL: $ApplicationUrl",
+        "- Site Name: $SiteName",
+        "- Site Path: $SitePath",
+        "- App Pool: $AppPoolName",
+        "- Repo Root: $RepoRoot",
+        "- Deployment Zip: $DeploymentZip",
+        "- Transcript Log: $TranscriptPath",
+        "- SQL Instance: $SqlInstanceName",
+        "- Connection String: $ConnectionString",
+        "",
+        "## Installed Components",
+        "",
+        "- IIS Install Attempted: $(-not $SkipIisInstall)",
+        "- SQL Express Install Attempted: $(-not $SkipSqlExpressInstall)",
+        "- .NET SDK Install Attempted: $(-not $SkipDotNetSdkInstall)",
+        "- Hosting Bundle Install Attempted: $(-not $SkipHostingBundleInstall)",
+        "- Database Update Attempted: $(-not $SkipDatabaseUpdate)",
+        "- Deploy Attempted: $(-not $SkipDeploy)",
+        "",
+        "## SQL Service",
+        "",
+        "- Service Found: $([bool]$sqlService)",
+        "- Service Status: $(if ($sqlService) { $sqlService.Status } else { 'NotFound' })",
+        "",
+        "## dotnet SDKs",
+        ""
+    )
+
+    if ($sdkList.Count -gt 0) {
+        $reportLines += $sdkList | ForEach-Object { "- $_" }
+    }
+    else {
+        $reportLines += "- none detected"
+    }
+
+    $reportLines += @(
+        "",
+        "## dotnet Runtimes",
+        ""
+    )
+
+    if ($runtimeList.Count -gt 0) {
+        $reportLines += $runtimeList | ForEach-Object { "- $_" }
+    }
+    else {
+        $reportLines += "- none detected"
+    }
+
+    if ($null -ne $siteSummary) {
+        $reportLines += @(
+            "",
+            "## IIS Site",
+            "",
+            "- Name: $($siteSummary.Name)",
+            "- Physical Path: $($siteSummary.PhysicalPath)",
+            "- Application Pool: $($siteSummary.ApplicationPool)",
+            "- Bindings:"
+        )
+        if ($siteSummary.Bindings.Count -gt 0) {
+            $reportLines += $siteSummary.Bindings
+        }
+        else {
+            $reportLines += "- none found"
+        }
+    }
+
+    Set-Content -Path $DestinationPath -Value $reportLines -Encoding UTF8
+}
+
+$transcriptStarted = $false
+$deploymentZip = ""
+$repoRoot = Join-Path $WorkspaceRoot $RepoFolderName
+$timestamp = Get-Timestamp
+
+Ensure-Directory -Path $DownloadsRoot
+Ensure-Directory -Path $WorkspaceRoot
+Ensure-Directory -Path $LogRoot
+
+$transcriptPath = Join-Path $LogRoot "bootstrap-$timestamp.log"
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    $ReportPath = Join-Path $LogRoot "bootstrap-report-$timestamp.md"
+}
+
+try {
+    Start-Transcript -Path $transcriptPath -Force | Out-Null
+    $transcriptStarted = $true
+
+    Ensure-RunningAsAdministrator
+
+    if ([string]::IsNullOrWhiteSpace($JwtKey)) {
+        throw "JwtKey is required."
+    }
+
+    if ($JwtKey.Length -lt 32) {
+        throw "JwtKey must be at least 32 characters long."
+    }
+
+    if ($Protocol -eq "https" -and [string]::IsNullOrWhiteSpace($HostName)) {
+        throw "HostName is required when using HTTPS."
+    }
+
+    if ($Port -lt 1 -or $Port -gt 65535) {
+        throw "Port must be between 1 and 65535."
+    }
+
+    $releaseMetadata = Get-DotNetReleaseMetadata -Channel $DotNetChannel
+
+    if (-not $SkipIisInstall) {
+        Install-IisRoleServices
+    }
+
+    if (-not $SkipDotNetSdkInstall) {
+        Install-DotNetSdk -ReleaseMetadata $releaseMetadata -DestinationRoot $DownloadsRoot
+    }
+
+    if (-not $SkipHostingBundleInstall) {
+        Install-HostingBundle -ReleaseMetadata $releaseMetadata -DestinationRoot $DownloadsRoot
+    }
+
+    if (-not $SkipSqlExpressInstall) {
+        Install-SqlExpress -DestinationRoot $DownloadsRoot -InstanceName $SqlInstanceName -DownloadUrl $SqlExpressDownloadUrl
+    }
+
+    if (-not $SkipSourceDownload) {
+        $repoRoot = Expand-RepoZip -ZipUrl $RepoZipUrl -DestinationRoot $WorkspaceRoot -FolderName $RepoFolderName -DownloadRoot $DownloadsRoot
+    }
+    elseif (-not (Test-Path -LiteralPath $repoRoot)) {
+        throw "SkipSourceDownload was used, but the repo folder does not exist at $repoRoot."
+    }
+
+    if (-not $SkipDatabaseUpdate) {
+        Invoke-DatabaseUpdate -RepoRoot $repoRoot -Connection $ConnectionString
+    }
+
+    $deploymentZip = Invoke-PublishPackage -RepoRoot $repoRoot -BuildConfiguration $Configuration -OmitTests:$SkipTests
+
+    if (-not $SkipDeploy) {
+        $deployScript = Join-Path $repoRoot "scripts\Deploy-IISProduction.ps1"
+        $deployArguments = @(
+            "-ExecutionPolicy", "Bypass",
+            "-File", $deployScript,
+            "-ZipPath", $deploymentZip,
+            "-SiteName", $SiteName,
+            "-SitePath", $SitePath,
+            "-HostName", $HostName,
+            "-AppPoolName", $AppPoolName,
+            "-Protocol", $Protocol,
+            "-Port", $Port,
+            "-ConnectionString", $ConnectionString,
+            "-JwtIssuer", $JwtIssuer,
+            "-JwtAudience", $JwtAudience,
+            "-JwtKey", $JwtKey,
+            "-JwtAccessTokenMinutes", $JwtAccessTokenMinutes
+        )
+
+        if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
+            $deployArguments += @("-CertificateThumbprint", $CertificateThumbprint)
+        }
+
+        if ($UseRootHttpsBinding) {
+            $deployArguments += "-UseRootHttpsBinding"
+        }
+
+        Write-Step "Deploying the site to IIS"
+        Invoke-ProcessChecked -FilePath "powershell.exe" -ArgumentList $deployArguments -StepName "IIS deployment"
+    }
+
+    $finalUrl = "$Protocol://"
+    if (-not [string]::IsNullOrWhiteSpace($HostName)) {
+        $finalUrl += $HostName
+    }
+    else {
+        $finalUrl += "localhost"
+    }
+
+    if (($Protocol -eq "http" -and $Port -ne 80) -or ($Protocol -eq "https" -and $Port -ne 443)) {
+        $finalUrl += ":$Port"
+    }
+
+    $finalUrl += "/"
+
+    New-PostInstallReport -DestinationPath $ReportPath -RepoRoot $repoRoot -DeploymentZip $deploymentZip -TranscriptPath $transcriptPath -ApplicationUrl $finalUrl
+
+    Write-Step "Bootstrap complete"
+    Write-Host "Repository root: $repoRoot"
+    Write-Host "Deployment package: $deploymentZip"
+    Write-Host "Transcript log: $transcriptPath"
+    Write-Host "Post-install report: $ReportPath"
+    if (-not $SkipDeploy) {
+        Write-Host "Application URL: $finalUrl"
+    }
+}
+finally {
+    if ($transcriptStarted) {
+        Stop-Transcript | Out-Null
+    }
+}

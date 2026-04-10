@@ -5,6 +5,9 @@ param(
     [string]$SitePath = "C:\sites\QuizAPI\current",
     [string]$HostName = "oumwqapptst02.oumed.net",
     [string]$AppPoolName = "QuizAppPool",
+    [ValidateSet("http", "https")]
+    [string]$Protocol = "https",
+    [int]$Port = 443,
     [string]$ConnectionString = "Server=.\SQLEXPRESS;Database=QuizDB;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;",
     [string]$JwtIssuer = "QuizAPI",
     [string]$JwtAudience = "QuizAPIUsers",
@@ -61,6 +64,16 @@ if (-not (Test-Path $ZipPath)) {
     throw "ZipPath not found: $ZipPath"
 }
 
+if ($Port -lt 1 -or $Port -gt 65535) {
+    throw "Port must be between 1 and 65535."
+}
+
+if ($Protocol -eq "https" -and [string]::IsNullOrWhiteSpace($HostName)) {
+    throw "HostName is required when using HTTPS."
+}
+
+$effectiveHostName = if ([string]::IsNullOrWhiteSpace($HostName)) { "localhost" } else { $HostName }
+
 Import-Module WebAdministration
 
 Write-Step "Ensuring deployment path exists"
@@ -90,11 +103,21 @@ Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name autoStart -Value $true
 
 Write-Step "Ensuring dedicated IIS site exists at root"
 if (-not (Test-Path "IIS:\Sites\$SiteName")) {
-    New-Website -Name $SiteName -PhysicalPath $SitePath -ApplicationPool $AppPoolName -Port 443 -Protocol https -HostHeader $HostName | Out-Null
+    New-Website -Name $SiteName -PhysicalPath $SitePath -ApplicationPool $AppPoolName -Port $Port -Protocol $Protocol -HostHeader $HostName | Out-Null
 }
 else {
     Set-ItemProperty "IIS:\Sites\$SiteName" -Name physicalPath -Value $SitePath
     Set-ItemProperty "IIS:\Sites\$SiteName" -Name applicationPool -Value $AppPoolName
+
+    $existingBindings = Get-WebBinding -Name $SiteName
+    foreach ($binding in $existingBindings) {
+        $bindingParts = $binding.bindingInformation.Split(":")
+        $bindingPort = [int]$bindingParts[1]
+        $bindingHostHeader = if ($bindingParts.Count -gt 2) { $bindingParts[2] } else { "" }
+        Remove-WebBinding -Name $SiteName -Protocol $binding.protocol -Port $bindingPort -HostHeader $bindingHostHeader
+    }
+
+    New-WebBinding -Name $SiteName -Protocol $Protocol -Port $Port -HostHeader $HostName | Out-Null
 }
 
 Write-Step "Setting IIS ASP.NET Core environment variables at '$SiteName'"
@@ -104,15 +127,15 @@ Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Issuer" -Value $JwtIssue
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Audience" -Value $JwtAudience
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Key" -Value $JwtKey
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__AccessTokenMinutes" -Value $JwtAccessTokenMinutes.ToString()
-Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Cors__AllowedOrigins__0" -Value ("https://" + $HostName)
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Cors__AllowedOrigins__0" -Value ("$Protocol://" + $effectiveHostName + $(if (($Protocol -eq "http" -and $Port -ne 80) -or ($Protocol -eq "https" -and $Port -ne 443)) { ":" + $Port } else { "" }))
 
-if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
+if ($Protocol -eq "https" -and -not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
     Write-Step "Ensuring HTTPS certificate binding exists for '$HostName'"
     $bindingPath = if ($UseRootHttpsBinding) {
-        "IIS:\SslBindings\0.0.0.0!443"
+        "IIS:\SslBindings\0.0.0.0!$Port"
     }
     else {
-        "IIS:\SslBindings\0.0.0.0!443!$HostName"
+        "IIS:\SslBindings\0.0.0.0!$Port!$HostName"
     }
 
     if (Test-Path $bindingPath) {
@@ -122,7 +145,12 @@ if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
     New-Item $bindingPath -Thumbprint $CertificateThumbprint -SSLFlags $(if ($UseRootHttpsBinding) { 0 } else { 1 }) | Out-Null
 }
 else {
-    Write-Step "Leaving HTTPS certificate binding unchanged because no thumbprint was supplied"
+    if ($Protocol -eq "https") {
+        Write-Step "Leaving HTTPS certificate binding unchanged because no thumbprint was supplied"
+    }
+    else {
+        Write-Step "HTTP binding selected; certificate binding skipped"
+    }
 }
 
 Write-Step "Granting file permissions to the IIS app pool identity"
@@ -146,5 +174,5 @@ Start-Website -Name $SiteName
 
 Write-Step "Deployment complete"
 Write-Host "Site Name: $SiteName"
-Write-Host "Application URL: https://$HostName/"
+Write-Host "Application URL: $Protocol://$effectiveHostName$(if (($Protocol -eq 'http' -and $Port -ne 80) -or ($Protocol -eq 'https' -and $Port -ne 443)) { ':' + $Port } else { '' })/"
 Write-Host "Physical Path: $SitePath"

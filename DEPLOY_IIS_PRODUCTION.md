@@ -4,6 +4,7 @@ This runbook is tailored to this app and your target environment.
 
 Automation scripts:
 
+- [scripts/Bootstrap-Windows2019-QuizServer.ps1](scripts/Bootstrap-Windows2019-QuizServer.ps1)
 - [scripts/Publish-IISPackage.ps1](scripts/Publish-IISPackage.ps1)
 - [scripts/Deploy-IISProduction.ps1](scripts/Deploy-IISProduction.ps1)
 - [scripts/Get-IISServerInventory.ps1](scripts/Get-IISServerInventory.ps1)
@@ -49,6 +50,34 @@ This creates a timestamped publish folder and deployment zip under:
 - `.\publish\{timestamp}`
 - `.\DeploymentBundle\QuizAPI_IIS_Production_{timestamp}.zip`
 
+## Automated Bare-Server Provisioning
+
+For a fresh Windows Server 2019 host, you can automate the full build-out with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
+  -JwtKey "PUT_LONG_RANDOM_SECRET_HERE" `
+  -HostName "oumwqapptst02.oumed.net" `
+  -Protocol "https" `
+  -Port 443 `
+  -CertificateThumbprint "YOUR_CERT_THUMBPRINT"
+```
+
+What the bootstrap does:
+
+1. installs IIS and required Windows features
+2. downloads and installs the latest .NET 9 SDK from official .NET release metadata
+3. downloads and installs the latest .NET 9 Hosting Bundle from official .NET release metadata
+4. downloads and installs SQL Server 2019 Express if `SQLEXPRESS` is not already present
+5. downloads the repo ZIP from GitHub
+6. runs EF Core migrations against the target connection string
+7. builds, tests, and packages the app
+8. deploys the package into IIS using `Deploy-IISProduction.ps1`
+9. writes a full transcript log under `C:\Deploy\logs`
+10. generates a post-install Markdown report with the detected machine, IIS, SQL, and .NET state
+
+This is the preferred path when you are starting from a bare server rather than a pre-prepared IIS machine.
+
 ## Pre-Deployment Checklist
 
 Before deploying, confirm:
@@ -58,6 +87,7 @@ Before deploying, confirm:
 3. `IIS APPPOOL\QuizAppPool` has access to `QuizDB`.
 4. The SSL certificate for `oumwqapptst02.oumed.net` is installed in `Cert:\LocalMachine\My`.
 5. Port `443` is available for the dedicated IIS site binding.
+6. The PowerShell session is elevated if you are using the automation scripts.
 
 ## Step 1: Copy the Zip to the Server
 

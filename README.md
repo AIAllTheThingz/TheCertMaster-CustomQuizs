@@ -92,8 +92,9 @@ Recommended for a more comfortable production footprint:
 
 ### Operating System
 
-Supported and recommended host environment:
+Supported and recommended host environments:
 
+- Windows Server 2019
 - Windows Server 2022 or newer
 
 Also workable for development or small internal evaluation:
@@ -163,11 +164,53 @@ Important:
 
 This is the shortest path to a working server for this repository.
 
+### Automated Bring-Up
+
+For a bare Windows Server 2019 machine, the fastest path is the bootstrap script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
+  -JwtKey "replace-with-a-real-32-plus-character-secret-key" `
+  -HostName "quiz.yourdomain.example" `
+  -Protocol "https" `
+  -Port 443 `
+  -CertificateThumbprint "YOUR_CERT_THUMBPRINT"
+```
+
+The bootstrap script can:
+
+- install IIS and required Windows features
+- download and install the current .NET 9 SDK
+- download and install the current .NET 9 ASP.NET Core Hosting Bundle
+- download and install SQL Server 2019 Express
+- download the GitHub repo source zip
+- apply EF Core migrations to create or update the target database
+- build, test, publish, and package the app
+- deploy the published app into IIS using the existing deployment script
+- write a full PowerShell transcript log under `C:\Deploy\logs`
+- generate a post-install Markdown report with the detected IIS, SQL, and .NET state
+
+If you want a plain HTTP first-pass install before TLS is ready:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
+  -JwtKey "replace-with-a-real-32-plus-character-secret-key" `
+  -Protocol "http" `
+  -Port 80
+```
+
+Important:
+
+- run the bootstrap script from an elevated PowerShell session
+- if SQL Express, IIS, the SDK, or the Hosting Bundle already exist, the script will skip reinstalling them
+- the SQL Express download URL is parameterized and can be overridden if your environment mirrors installers internally
+- production secrets should still come from secure deployment inputs, not from source control
+
 ### 1. Prepare Windows
 
 Install:
 
-- Windows Server 2022
+- Windows Server 2019 or newer
 - latest Windows updates
 
 Install IIS features:
@@ -184,6 +227,7 @@ Install IIS features:
 Install on the server:
 
 - .NET 9 ASP.NET Core Hosting Bundle
+- .NET 9 SDK if you plan to build or publish on the server
 
 This is what allows IIS to host the published ASP.NET Core app.
 
@@ -261,6 +305,12 @@ dotnet test QuizAPI.sln -c Release
 
 ```powershell
 dotnet publish QuizAPI.csproj -c Release -o .\publish
+```
+
+Or build the IIS deployment bundle:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-IISPackage.ps1
 ```
 
 ### 8. Create the IIS Site
@@ -341,6 +391,7 @@ In the current local setup:
 ## IIS Deployment Notes
 
 - The app is designed to be served from the root of a site, for example `https://fqdn.com/`
+- For automated provisioning on Windows Server 2019, use `scripts/Bootstrap-Windows2019-QuizServer.ps1`
 - Main pages are served directly from the same application:
   - `/`
   - `/register.html`
