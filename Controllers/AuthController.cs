@@ -50,7 +50,7 @@ namespace QuizAPI.Controllers
             public string Password { get; set; } = string.Empty;
         }
 
-        [EnableRateLimiting("AuthPolicy")]
+        [EnableRateLimiting("AuthRegisterPolicy")]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
@@ -82,7 +82,7 @@ namespace QuizAPI.Controllers
             return Ok($"User {email} created with role User");
         }
 
-        [EnableRateLimiting("AuthPolicy")]
+        [EnableRateLimiting("AuthLoginPolicy")]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {

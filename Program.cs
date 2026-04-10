@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Net;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -68,7 +69,6 @@ if (OperatingSystem.IsWindows())
 // Controllers & JSON
 builder.Services.AddControllers()
     .AddJsonOptions(o => { o.JsonSerializerOptions.PropertyNamingPolicy = null; });
-builder.Services.AddHealthChecks();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -149,14 +149,33 @@ builder.Services.AddCors(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    var authPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitLimit") ?? 10, 1, 5000);
     var authWindowMinutes = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5, 1, 60);
-    options.AddPolicy("AuthPolicy", httpContext =>
+    var authRegisterPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:RegisterPermitLimit") ?? 10, 1, 5000);
+    var authLoginPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:LoginPermitLimit") ?? 25, 1, 5000);
+    var authLoopbackPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:LoopbackPermitLimit") ?? 200, 1, 10000);
+
+    options.AddPolicy("AuthRegisterPolicy", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            partitionKey: $"register:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = authPermitLimit,
+                PermitLimit = httpContext.Connection.RemoteIpAddress is { } remoteIp && IPAddress.IsLoopback(remoteIp)
+                    ? authLoopbackPermitLimit
+                    : authRegisterPermitLimit,
+                Window = TimeSpan.FromMinutes(authWindowMinutes),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy("AuthLoginPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"login:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = httpContext.Connection.RemoteIpAddress is { } remoteIp && IPAddress.IsLoopback(remoteIp)
+                    ? authLoopbackPermitLimit
+                    : authLoginPermitLimit,
                 Window = TimeSpan.FromMinutes(authWindowMinutes),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
@@ -224,6 +243,8 @@ builder.Services.AddAuthentication(options =>
 // Call to appsettings.json for SQL Express connection string
 builder.Services.AddDbContext<QuizDbContext>(options =>
     options.UseSqlServer(defaultConnection));
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseReadyHealthCheck>("sql", tags: new[] { "ready" });
 
 // App services
 builder.Services.AddScoped<QuizQueryService>();
@@ -264,6 +285,10 @@ app.UseAuthorization();
 app.UseMiddleware<AuditLoggingMiddleware>();
 app.MapControllers();
 app.MapHealthChecks("/health").AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).AllowAnonymous();
 
 using (var scope = app.Services.CreateScope())
 {
