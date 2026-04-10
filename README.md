@@ -170,7 +170,6 @@ For a bare Windows Server 2019 machine, the fastest path is the bootstrap script
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -JwtKey "replace-with-a-real-32-plus-character-secret-key" `
   -HostName "quiz.yourdomain.example" `
   -Protocol "https" `
   -Port 443 `
@@ -187,6 +186,7 @@ The bootstrap script can:
 - apply EF Core migrations to create or update the target database
 - build, test, publish, and package the app
 - deploy the published app into IIS using the existing deployment script
+- auto-generate a strong JWT key if `-JwtKey` is omitted
 - write a full PowerShell transcript log under `C:\Deploy\logs`
 - generate a post-install Markdown report with the detected IIS, SQL, and .NET state
 
@@ -194,16 +194,17 @@ If you want a plain HTTP first-pass install before TLS is ready:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -JwtKey "replace-with-a-real-32-plus-character-secret-key" `
   -Protocol "http" `
   -Port 80
 ```
 
 Important:
 
+- this automation is written for Windows PowerShell 5.1 and should be run with `powershell.exe`
 - run the bootstrap script from an elevated PowerShell session
 - if SQL Express, IIS, the SDK, or the Hosting Bundle already exist, the script will skip reinstalling them
 - the SQL Express download URL is parameterized and can be overridden if your environment mirrors installers internally
+- use `-SaveGeneratedJwtKey` if you want the bootstrap to keep a recovery copy of an auto-generated JWT key with restricted local ACLs
 - production secrets should still come from secure deployment inputs, not from source control
 
 ### 1. Prepare Windows

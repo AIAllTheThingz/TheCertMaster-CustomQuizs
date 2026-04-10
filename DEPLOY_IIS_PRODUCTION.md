@@ -56,7 +56,6 @@ For a fresh Windows Server 2019 host, you can automate the full build-out with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -JwtKey "PUT_LONG_RANDOM_SECRET_HERE" `
   -HostName "oumwqapptst02.oumed.net" `
   -Protocol "https" `
   -Port 443 `
@@ -73,10 +72,29 @@ What the bootstrap does:
 6. runs EF Core migrations against the target connection string
 7. builds, tests, and packages the app
 8. deploys the package into IIS using `Deploy-IISProduction.ps1`
-9. writes a full transcript log under `C:\Deploy\logs`
-10. generates a post-install Markdown report with the detected machine, IIS, SQL, and .NET state
+9. generates a strong JWT signing key automatically if one is not supplied
+10. writes that JWT key into IIS app-level environment variables during deployment
+11. writes a full transcript log under `C:\Deploy\logs`
+12. generates a post-install Markdown report with the detected machine, IIS, SQL, and .NET state
+
+If you want the bootstrap to keep a locally recoverable copy of the generated JWT key:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
+  -HostName "oumwqapptst02.oumed.net" `
+  -Protocol "https" `
+  -Port 443 `
+  -CertificateThumbprint "YOUR_CERT_THUMBPRINT" `
+  -SaveGeneratedJwtKey
+```
 
 This is the preferred path when you are starting from a bare server rather than a pre-prepared IIS machine.
+
+Run the automation with Windows PowerShell 5.1:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 ...
+```
 
 ## Pre-Deployment Checklist
 

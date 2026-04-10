@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [string]$ZipPath = "C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_20260318_182000.zip",
