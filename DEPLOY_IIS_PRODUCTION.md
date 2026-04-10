@@ -4,8 +4,9 @@ This runbook is tailored to this app and your target environment.
 
 Automation scripts:
 
-- [Deploy-IISProduction.ps1](D:\Quiz_Application\QuizAPI\scripts\Deploy-IISProduction.ps1)
-- [Get-IISServerInventory.ps1](D:\Quiz_Application\QuizAPI\scripts\Get-IISServerInventory.ps1)
+- [scripts/Publish-IISPackage.ps1](scripts/Publish-IISPackage.ps1)
+- [scripts/Deploy-IISProduction.ps1](scripts/Deploy-IISProduction.ps1)
+- [scripts/Get-IISServerInventory.ps1](scripts/Get-IISServerInventory.ps1)
 
 ## Target Environment
 
@@ -37,9 +38,16 @@ Final expected app URL:
 
 ## Deployment Package
 
-Use this deployment zip:
+Build the deployment zip from the repo first:
 
-- [QuizAPI_IIS_Production_20260318_182000.zip](D:\Quiz_Application\QuizAPI\bin\Release\net9.0\QuizAPI_IIS_Production_20260318_182000.zip)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-IISPackage.ps1
+```
+
+This creates a timestamped publish folder and deployment zip under:
+
+- `.\publish\{timestamp}`
+- `.\DeploymentBundle\QuizAPI_IIS_Production_{timestamp}.zip`
 
 ## Pre-Deployment Checklist
 
@@ -56,14 +64,14 @@ Before deploying, confirm:
 Example destination:
 
 ```powershell
-C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_20260318_182000.zip
+C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_YYYYMMDD_HHMMSS.zip
 ```
 
 ## Step 2: Create the Site Folder and Extract
 
 ```powershell
 New-Item -ItemType Directory -Path C:\sites\QuizAPI\current -Force
-Expand-Archive -Path C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_20260318_182000.zip -DestinationPath C:\sites\QuizAPI\current -Force
+Expand-Archive -Path C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_YYYYMMDD_HHMMSS.zip -DestinationPath C:\sites\QuizAPI\current -Force
 ```
 
 ## Step 3: Create Runtime Folders

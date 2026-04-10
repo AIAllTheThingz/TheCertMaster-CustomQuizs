@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using System.Text;
 using System.Security.Claims;
 using QuizAPI.Data;
@@ -23,6 +24,7 @@ var builder = WebApplication.CreateBuilder(args);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 var jwtKey = builder.Configuration["Jwt:Key"];
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(jwtIssuer))
     throw new InvalidOperationException("Jwt:Issuer is required.");
@@ -33,11 +35,25 @@ if (string.IsNullOrWhiteSpace(jwtAudience))
 if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
     throw new InvalidOperationException("Jwt:Key is required and must be at least 32 characters long.");
 
+if (string.IsNullOrWhiteSpace(defaultConnection))
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
+
 var jwtSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
 
 // Persist DataProtection keys so cookies/auth survive IIS recycles/reboots
-var keysPath = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");
+var appDataPath = Path.Combine(builder.Environment.ContentRootPath, "App_Data");
+var keysPath = Path.Combine(appDataPath, "keys");
+var appDataUploadsPath = Path.Combine(appDataPath, "uploads");
+var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+var webRootUploadsPath = Path.Combine(webRootPath, "uploads");
+var logsPath = Path.Combine(builder.Environment.ContentRootPath, "logs");
+
+Directory.CreateDirectory(appDataPath);
 Directory.CreateDirectory(keysPath);
+Directory.CreateDirectory(appDataUploadsPath);
+Directory.CreateDirectory(webRootPath);
+Directory.CreateDirectory(webRootUploadsPath);
+Directory.CreateDirectory(logsPath);
 
 var dataProtection = builder.Services
     .AddDataProtection()
@@ -52,6 +68,7 @@ if (OperatingSystem.IsWindows())
 // Controllers & JSON
 builder.Services.AddControllers()
     .AddJsonOptions(o => { o.JsonSerializerOptions.PropertyNamingPolicy = null; });
+builder.Services.AddHealthChecks();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -206,7 +223,7 @@ builder.Services.AddAuthentication(options =>
 
 // Call to appsettings.json for SQL Express connection string
 builder.Services.AddDbContext<QuizDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(defaultConnection));
 
 // App services
 builder.Services.AddScoped<QuizQueryService>();
@@ -218,13 +235,14 @@ builder.Services.AddScoped<ISmtpSettingsStore, FileSmtpSettingsStore>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
+var swaggerEnabled = builder.Configuration.GetValue<bool?>("Swagger:Enabled") ?? app.Environment.IsDevelopment();
 
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
 
-if (app.Environment.IsDevelopment())
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
@@ -245,6 +263,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<AuditLoggingMiddleware>();
 app.MapControllers();
+app.MapHealthChecks("/health").AllowAnonymous();
 
 using (var scope = app.Services.CreateScope())
 {

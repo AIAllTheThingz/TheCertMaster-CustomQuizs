@@ -25,6 +25,17 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
     }
 
     [Fact]
+    public async Task Health_Endpoint_Returns_Ok_Without_Authentication()
+    {
+        await _factory.InitializeAsync();
+
+        using var client = _factory.CreateClient();
+        using var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task SamplePackage_Imports_And_Returns_Image_Urls_EndToEnd()
     {
         await _factory.InitializeAsync();

@@ -19,9 +19,15 @@ TestResults/
 
 # Logs
 *.log
+logs/
 
 # Local archives and publish output
 publish/
 DeploymentBundle/
 QuizAPI_Corporate.zip
 OtherMigrations/QuizAPI_Corporate_Source.zip
+
+# Runtime and environment-specific application data
+App_Data/
+wwwroot/uploads/
+Samples/ImportPackage/sample-import-package.zip
