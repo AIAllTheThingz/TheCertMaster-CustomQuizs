@@ -470,6 +470,37 @@ function Get-ScriptParameterNames {
     return @($command.Parameters.Keys)
 }
 
+function Invoke-DeployScriptSafely {
+    param(
+        [string]$ScriptPath,
+        [hashtable]$Parameters
+    )
+
+    try {
+        & $ScriptPath @Parameters
+        return
+    }
+    catch [System.Management.Automation.ParameterBindingException] {
+        $message = $_.Exception.Message
+        $optionalKeys = @("Protocol", "Port", "CertificateThumbprint", "UseRootHttpsBinding")
+        $removedAny = $false
+
+        foreach ($key in $optionalKeys) {
+            if ($Parameters.ContainsKey($key) -and $message -like "*parameter name '$key'*") {
+                $Parameters.Remove($key)
+                $removedAny = $true
+            }
+        }
+
+        if (-not $removedAny) {
+            throw
+        }
+
+        Write-Warning "Deploy script rejected one or more optional parameters. Retrying with backward-compatible parameter set."
+        & $ScriptPath @Parameters
+    }
+}
+
 function New-PostInstallReport {
     param(
         [string]$DestinationPath,
@@ -715,7 +746,7 @@ if (-not $SkipDeploy) {
     }
 
     Write-Step "Deploying the site to IIS"
-    & $deployScript @deployParams
+    Invoke-DeployScriptSafely -ScriptPath $deployScript -Parameters $deployParams
 }
 
     $finalUrl = "${Protocol}://"
