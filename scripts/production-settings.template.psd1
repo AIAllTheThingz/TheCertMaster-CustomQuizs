@@ -11,6 +11,7 @@
     # Leave blank to use localhost for HTTP-only installs.
     HostName = ''
     PublicBaseUrl = 'http://localhost'
+    EnableHttpsRedirection = $false
 
     # Leave blank to auto-generate a strong key during install.
     JwtKey = ''

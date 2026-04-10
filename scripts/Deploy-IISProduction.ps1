@@ -14,6 +14,7 @@ param(
     [string]$JwtAudience = "QuizAPIUsers",
     [string]$JwtKey,
     [int]$JwtAccessTokenMinutes = 60,
+    [bool]$EnableHttpsRedirection = $true,
     [string]$BootstrapAdminEmail = "",
     [string]$BootstrapAdminPassword = "",
     [string]$BootstrapAdminFirstName = "",
@@ -137,6 +138,7 @@ Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Issuer" -Value $JwtIssue
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Audience" -Value $JwtAudience
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Key" -Value $JwtKey
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__AccessTokenMinutes" -Value $JwtAccessTokenMinutes.ToString()
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "HttpsRedirection__Enabled" -Value $EnableHttpsRedirection.ToString().ToLowerInvariant()
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Cors__AllowedOrigins__0" -Value ("${Protocol}://" + $effectiveHostName + $(if (($Protocol -eq "http" -and $Port -ne 80) -or ($Protocol -eq "https" -and $Port -ne 443)) { ":" + $Port } else { "" }))
 
 if (-not [string]::IsNullOrWhiteSpace($BootstrapAdminEmail)) {

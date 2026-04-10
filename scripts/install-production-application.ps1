@@ -18,6 +18,7 @@ param(
     [string]$DatabaseName = 'QuizDB',
     [string]$ConnectionString = '',
     [string]$PublicBaseUrl = '',
+    [Nullable[bool]]$EnableHttpsRedirection = $null,
     [string]$JwtKey = '',
     [string]$JwtIssuer = 'QuizAPI',
     [string]$JwtAudience = 'QuizAPIUsers',
@@ -169,6 +170,28 @@ END;
     Invoke-SqlQuery -Query $query | Out-Host
 }
 
+function Test-BootstrapAdminExists {
+    param([string]$Email)
+
+    if ([string]::IsNullOrWhiteSpace($Email)) {
+        return $false
+    }
+
+    $safeEmail = $Email.Replace("'", "''")
+    $query = "SET NOCOUNT ON; SELECT COUNT(1) AS UserCount FROM [dbo].[AspNetUsers] WHERE [Email] = N'$safeEmail';"
+    $result = Invoke-SqlQuery -Query $query -Database $DatabaseName
+    $text = ($result | Out-String).Trim()
+
+    foreach ($line in ($text -split "`r?`n")) {
+        $trimmed = $line.Trim()
+        if ($trimmed -match '^\d+$') {
+            return ([int]$trimmed) -gt 0
+        }
+    }
+
+    return $false
+}
+
 function Resolve-Inputs {
     if ([string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
         $defaultBaseUrl = if ([string]::IsNullOrWhiteSpace($HostName)) { "http://localhost" } else { "${Protocol}://$HostName" }
@@ -181,6 +204,10 @@ function Resolve-Inputs {
 
     if ([string]::IsNullOrWhiteSpace($ConnectionString)) {
         $script:ConnectionString = Build-ConnectionString
+    }
+
+    if ($null -eq $EnableHttpsRedirection) {
+        $script:EnableHttpsRedirection = ($Protocol -eq 'https')
     }
 
     if ([string]::IsNullOrWhiteSpace($JwtKey)) {
@@ -270,6 +297,7 @@ Write-Step 'Deploying application to IIS'
     -JwtAudience $JwtAudience `
     -JwtKey $JwtKey `
     -JwtAccessTokenMinutes $JwtAccessTokenMinutes `
+    -EnableHttpsRedirection:$EnableHttpsRedirection `
     -BootstrapAdminEmail $BootstrapAdminEmail `
     -BootstrapAdminPassword $BootstrapAdminPassword `
     -BootstrapAdminFirstName $BootstrapAdminFirstName `
@@ -278,6 +306,11 @@ Write-Step 'Deploying application to IIS'
 
 if ($LASTEXITCODE -ne 0) {
     throw 'Deploy script failed.'
+}
+
+Write-Step 'Verifying bootstrap admin exists in the deployed database'
+if (-not (Test-BootstrapAdminExists -Email $BootstrapAdminEmail)) {
+    throw "Bootstrap admin '$BootstrapAdminEmail' was not found in database '$DatabaseName' after deployment."
 }
 
 if ($EnableSmokeTest) {
@@ -292,3 +325,4 @@ Write-Host "SQL connection: $ConnectionString" -ForegroundColor Green
 Write-Host "Site path: $SitePath" -ForegroundColor Green
 Write-Host "Public base URL: $PublicBaseUrl" -ForegroundColor Green
 Write-Host "Bootstrap admin: $BootstrapAdminEmail" -ForegroundColor Green
+Write-Host "HTTPS redirection enabled: $EnableHttpsRedirection" -ForegroundColor Green

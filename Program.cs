@@ -257,6 +257,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 var swaggerEnabled = builder.Configuration.GetValue<bool?>("Swagger:Enabled") ?? app.Environment.IsDevelopment();
+var httpsRedirectionEnabled = builder.Configuration.GetValue<bool?>("HttpsRedirection:Enabled")
+    ?? !app.Environment.IsDevelopment();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -273,7 +275,10 @@ if (swaggerEnabled)
     });
 }
 
-app.UseHttpsRedirection();
+if (httpsRedirectionEnabled)
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors(CorsPolicyName);
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -380,6 +385,8 @@ using (var scope = app.Services.CreateScope())
                     string.Join("; ", addRoleResult.Errors.Select(e => e.Description)));
             }
         }
+
+        app.Logger.LogInformation("Bootstrap admin ready for {Email}.", bootstrapAdminEmail);
     }
 }
 
