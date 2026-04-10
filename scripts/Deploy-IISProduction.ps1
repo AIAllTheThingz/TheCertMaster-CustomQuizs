@@ -104,7 +104,12 @@ Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name autoStart -Value $true
 
 Write-Step "Ensuring dedicated IIS site exists at root"
 if (-not (Test-Path "IIS:\Sites\$SiteName")) {
-    New-Website -Name $SiteName -PhysicalPath $SitePath -ApplicationPool $AppPoolName -Port $Port -Protocol $Protocol -HostHeader $HostName | Out-Null
+    New-Website -Name $SiteName -PhysicalPath $SitePath -ApplicationPool $AppPoolName -Port $Port -HostHeader $HostName | Out-Null
+
+    if ($Protocol -ne "http") {
+        Remove-WebBinding -Name $SiteName -Protocol "http" -Port $Port -HostHeader $HostName -ErrorAction SilentlyContinue
+        New-WebBinding -Name $SiteName -Protocol $Protocol -Port $Port -HostHeader $HostName | Out-Null
+    }
 }
 else {
     Set-ItemProperty "IIS:\Sites\$SiteName" -Name physicalPath -Value $SitePath
