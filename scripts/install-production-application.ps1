@@ -98,6 +98,19 @@ function Ensure-DotNetInstalled {
     return $dotnetExe
 }
 
+function Initialize-DotNetEnvironment {
+    param([string]$DotNetExe)
+
+    $dotnetRoot = Split-Path -Path $DotNetExe -Parent
+    $pathEntries = @($env:Path -split ';') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    if ($pathEntries -notcontains $dotnetRoot) {
+        $env:Path = $dotnetRoot + ';' + ($pathEntries -join ';')
+    }
+
+    $env:DOTNET_ROOT = $dotnetRoot
+}
+
 function Ensure-DotNetEfInstalled {
     $dotnetEfExe = Join-Path (Join-Path $DeploymentRoot 'tools') 'dotnet-ef.exe'
     if (-not (Test-Path -LiteralPath $dotnetEfExe)) {
@@ -188,6 +201,7 @@ Resolve-Inputs
 Write-Step 'Resolving source and tool locations'
 $sourceRoot = Resolve-SourceRoot
 $dotnetExe = Ensure-DotNetInstalled
+Initialize-DotNetEnvironment -DotNetExe $dotnetExe
 $dotnetEfExe = Ensure-DotNetEfInstalled
 $publishScript = Join-Path $PSScriptRoot 'Publish-IISPackage.ps1'
 $deployScript = Join-Path $PSScriptRoot 'Deploy-IISProduction.ps1'
