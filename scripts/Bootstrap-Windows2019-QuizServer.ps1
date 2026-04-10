@@ -38,6 +38,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Write-Step {
     param([string]$Message)
@@ -785,7 +786,7 @@ try {
     $deploymentZip = Invoke-PublishPackage -RepoRoot $repoRoot -BuildConfiguration $Configuration -OmitTests:$SkipTests
 
 if (-not $SkipDeploy) {
-    $deployScript = Join-Path $repoRoot "scripts\Deploy-IISProduction.ps1"
+    $deployScript = Join-Path $scriptRoot "Deploy-IISProduction.ps1"
     $deployScriptParameters = Get-ScriptParameterNames -ScriptPath $deployScript
     $deployParams = @{
         ZipPath = $deploymentZip
