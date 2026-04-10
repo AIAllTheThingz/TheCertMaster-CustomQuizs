@@ -14,6 +14,10 @@ param(
     [string]$JwtAudience = "QuizAPIUsers",
     [string]$JwtKey,
     [int]$JwtAccessTokenMinutes = 60,
+    [string]$BootstrapAdminEmail = "",
+    [string]$BootstrapAdminPassword = "",
+    [string]$BootstrapAdminFirstName = "",
+    [string]$BootstrapAdminLastName = "",
     [string]$CertificateThumbprint = "",
     [switch]$UseRootHttpsBinding,
     [switch]$RunMigrations
@@ -134,6 +138,19 @@ Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Audience" -Value $JwtAud
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Key" -Value $JwtKey
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__AccessTokenMinutes" -Value $JwtAccessTokenMinutes.ToString()
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Cors__AllowedOrigins__0" -Value ("${Protocol}://" + $effectiveHostName + $(if (($Protocol -eq "http" -and $Port -ne 80) -or ($Protocol -eq "https" -and $Port -ne 443)) { ":" + $Port } else { "" }))
+
+if (-not [string]::IsNullOrWhiteSpace($BootstrapAdminEmail)) {
+    Set-IisAspNetCoreEnvVar -Location $SiteName -Name "BootstrapAdmin__Email" -Value $BootstrapAdminEmail
+    Set-IisAspNetCoreEnvVar -Location $SiteName -Name "BootstrapAdmin__Password" -Value $BootstrapAdminPassword
+
+    if (-not [string]::IsNullOrWhiteSpace($BootstrapAdminFirstName)) {
+        Set-IisAspNetCoreEnvVar -Location $SiteName -Name "BootstrapAdmin__FirstName" -Value $BootstrapAdminFirstName
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($BootstrapAdminLastName)) {
+        Set-IisAspNetCoreEnvVar -Location $SiteName -Name "BootstrapAdmin__LastName" -Value $BootstrapAdminLastName
+    }
+}
 
 if ($Protocol -eq "https" -and -not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
     Write-Step "Ensuring HTTPS certificate binding exists for '$HostName'"

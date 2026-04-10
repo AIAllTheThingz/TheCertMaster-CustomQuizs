@@ -300,11 +300,87 @@ using (var scope = app.Services.CreateScope())
     }
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
 
     if (!await roleManager.RoleExistsAsync("Admin"))
         await roleManager.CreateAsync(new IdentityRole("Admin"));
     if (!await roleManager.RoleExistsAsync("User"))
         await roleManager.CreateAsync(new IdentityRole("User"));
+
+    var bootstrapAdminEmail = app.Configuration["BootstrapAdmin:Email"]?.Trim();
+    var bootstrapAdminPassword = app.Configuration["BootstrapAdmin:Password"];
+    var bootstrapAdminFirstName = app.Configuration["BootstrapAdmin:FirstName"]?.Trim();
+    var bootstrapAdminLastName = app.Configuration["BootstrapAdmin:LastName"]?.Trim();
+
+    if (!string.IsNullOrWhiteSpace(bootstrapAdminEmail))
+    {
+        if (string.IsNullOrWhiteSpace(bootstrapAdminPassword))
+        {
+            throw new InvalidOperationException("BootstrapAdmin:Password is required when BootstrapAdmin:Email is configured.");
+        }
+
+        var bootstrapAdmin = await userManager.FindByEmailAsync(bootstrapAdminEmail);
+        if (bootstrapAdmin == null)
+        {
+            bootstrapAdmin = new AppUser
+            {
+                UserName = bootstrapAdminEmail,
+                Email = bootstrapAdminEmail,
+                FirstName = string.IsNullOrWhiteSpace(bootstrapAdminFirstName) ? "Admin" : bootstrapAdminFirstName,
+                LastName = string.IsNullOrWhiteSpace(bootstrapAdminLastName) ? "User" : bootstrapAdminLastName,
+                EmailConfirmed = true
+            };
+
+            var createResult = await userManager.CreateAsync(bootstrapAdmin, bootstrapAdminPassword);
+            if (!createResult.Succeeded)
+            {
+                throw new InvalidOperationException("Failed to create bootstrap admin user: " +
+                    string.Join("; ", createResult.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            var needsUpdate = false;
+
+            if (!string.IsNullOrWhiteSpace(bootstrapAdminFirstName) && bootstrapAdmin.FirstName != bootstrapAdminFirstName)
+            {
+                bootstrapAdmin.FirstName = bootstrapAdminFirstName;
+                needsUpdate = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(bootstrapAdminLastName) && bootstrapAdmin.LastName != bootstrapAdminLastName)
+            {
+                bootstrapAdmin.LastName = bootstrapAdminLastName;
+                needsUpdate = true;
+            }
+
+            if (!bootstrapAdmin.EmailConfirmed)
+            {
+                bootstrapAdmin.EmailConfirmed = true;
+                needsUpdate = true;
+            }
+
+            if (needsUpdate)
+            {
+                var updateResult = await userManager.UpdateAsync(bootstrapAdmin);
+                if (!updateResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Failed to update bootstrap admin user: " +
+                        string.Join("; ", updateResult.Errors.Select(e => e.Description)));
+                }
+            }
+        }
+
+        if (!await userManager.IsInRoleAsync(bootstrapAdmin, "Admin"))
+        {
+            var addRoleResult = await userManager.AddToRoleAsync(bootstrapAdmin, "Admin");
+            if (!addRoleResult.Succeeded)
+            {
+                throw new InvalidOperationException("Failed to assign Admin role to bootstrap admin: " +
+                    string.Join("; ", addRoleResult.Errors.Select(e => e.Description)));
+            }
+        }
+    }
 }
 
 app.Run();
