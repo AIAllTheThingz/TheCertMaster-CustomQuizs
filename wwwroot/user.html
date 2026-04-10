@@ -284,6 +284,7 @@
         </section>
     </main>
 
+    <script src="/scripts/json-utils.js"></script>
     <script>
         const status = document.getElementById('status');
         const profileGrid = document.getElementById('profileGrid');
@@ -367,14 +368,7 @@
             return isNaN(date.getTime()) ? value : date.toLocaleString();
         }
 
-        function getValue(obj, ...keys) {
-            for (const key of keys) {
-                if (obj && obj[key] !== undefined && obj[key] !== null) {
-                    return obj[key];
-                }
-            }
-            return '';
-        }
+        const getValue = (obj, ...keys) => ApiJson.getValue(obj, ...keys);
 
         async function loadProfile(page = currentHistoryPage) {
             const token = getToken();

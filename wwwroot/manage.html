@@ -299,6 +299,7 @@
     </div>
 
 
+    <script src="/scripts/json-utils.js"></script>
     <script>
 const loginForm = document.getElementById("loginForm");
         const uploadForm = document.getElementById("uploadForm");
@@ -384,32 +385,6 @@ const loginForm = document.getElementById("loginForm");
             return escapeHtml(str).replace(/`/g, "&#96;");
         }
 
-        function toCamelKey(key) {
-            if (!key || typeof key !== "string") return key;
-            return key.length === 1 ? key.toLowerCase() : (key[0].toLowerCase() + key.slice(1));
-        }
-
-        function normalizeKeys(value) {
-            if (Array.isArray(value)) {
-                return value.map(normalizeKeys);
-            }
-
-            if (value && typeof value === "object") {
-                const output = {};
-                for (const [key, child] of Object.entries(value)) {
-                    output[toCamelKey(key)] = normalizeKeys(child);
-                }
-                return output;
-            }
-
-            return value;
-        }
-
-        async function readJsonNormalized(res) {
-            const json = await res.json();
-            return normalizeKeys(json);
-        }
-
         function isZipFileName(name) {
             return String(name || "").toLowerCase().endsWith(".zip");
         }
@@ -481,7 +456,7 @@ const loginForm = document.getElementById("loginForm");
                     return;
                 }
 
-                const data = await readJsonNormalized(res);
+                const data = await ApiJson.readJsonNormalized(res);
                 token = data.token;
                 localStorage.setItem("jwtToken", token);
 
@@ -674,7 +649,7 @@ const loginForm = document.getElementById("loginForm");
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 if (!res.ok) return;
-                cachedUsers = await readJsonNormalized(res);
+                cachedUsers = await ApiJson.readJsonNormalized(res);
                 renderUsers(cachedUsers);
             } catch (err) { console.error(err); }
         }
@@ -693,7 +668,7 @@ const loginForm = document.getElementById("loginForm");
                     smtpStatus.textContent = 'Failed to load SMTP: ' + t;
                     return;
                 }
-                const s = await readJsonNormalized(res);
+                const s = await ApiJson.readJsonNormalized(res);
                 smtpHost.value = s.host ?? '';
                 smtpPort.value = s.port ?? 25;
                 smtpFromEmail.value = s.fromEmail ?? '';
@@ -1018,7 +993,7 @@ async function loadQuizzes() {
             return;
         }
 
-        const quizzes = await readJsonNormalized(res);
+        const quizzes = await ApiJson.readJsonNormalized(res);
         cachedQuizzes = Array.isArray(quizzes) ? quizzes : [];
         populatePreEmploymentQuizOptions(cachedQuizzes);
         populateQuestionEditorQuizOptions(cachedQuizzes);
@@ -1275,7 +1250,7 @@ async function loadQuizCreatorPage(page = 1) {
             return;
         }
 
-        const pageData = await readJsonNormalized(res);
+        const pageData = await ApiJson.readJsonNormalized(res);
         renderQuizCreatorQuestionTable(pageData);
     } catch (err) {
         quizCreatorStatus.textContent = "Error loading source questions: " + err.message;
@@ -1328,7 +1303,7 @@ async function createQuizFromSelectedQuestions() {
             return;
         }
 
-        const created = await readJsonNormalized(res);
+        const created = await ApiJson.readJsonNormalized(res);
         quizCreatorStatus.textContent = `Created quiz "${created.title || title}" with ${created.questionCount ?? quizCreatorState.selectedQuestions.length} question(s).`;
         quizCreatorState.selectedQuestions = [];
         renderQuizCreatorSelectedList();
@@ -1454,7 +1429,7 @@ async function loadQuestionEditorPage(page = 1) {
             return;
         }
 
-        const pageData = await readJsonNormalized(res);
+        const pageData = await ApiJson.readJsonNormalized(res);
         renderQuestionEditorTable(pageData);
     } catch (err) {
         questionEditorStatus.textContent = "Error loading question editor: " + err.message;
@@ -1534,7 +1509,7 @@ async function loadPreEmploymentConfig() {
             return;
         }
 
-        const cfg = await readJsonNormalized(res);
+        const cfg = await ApiJson.readJsonNormalized(res);
         preEmploymentTitle.value = cfg.title || "Pre-Employment Quiz";
         preEmploymentQuestionCount.value = cfg.questionCount || 20;
         preEmploymentTimeLimit.value = cfg.timeLimitMinutes || 0;
@@ -1601,7 +1576,7 @@ async function savePreEmploymentConfig() {
             return;
         }
 
-        const saved = await readJsonNormalized(res);
+        const saved = await ApiJson.readJsonNormalized(res);
         preEmploymentQuestionCount.value = saved.questionCount || payload.questionCount;
         const savedTitles = Array.isArray(saved.quizTitles) && saved.quizTitles.length
             ? saved.quizTitles
@@ -1639,7 +1614,7 @@ async function loadImportHistory() {
             return;
         }
 
-        const runs = await readJsonNormalized(res);
+        const runs = await ApiJson.readJsonNormalized(res);
 
         if (!Array.isArray(runs) || runs.length === 0) {
             historyStatus.textContent = "No import history yet.";
@@ -1697,7 +1672,7 @@ async function loadUsageReport() {
             return;
         }
 
-        const data = await readJsonNormalized(res);
+        const data = await ApiJson.readJsonNormalized(res);
         const usageRows = Array.isArray(data.mostTakenQuizzes) ? data.mostTakenQuizzes : [];
         const recentRows = Array.isArray(data.recentAttempts) ? data.recentAttempts : [];
         usageSummary.textContent = `Total attempts: ${data.totalAttempts ?? 0} | Unique users: ${data.uniqueUsers ?? 0}`;
@@ -1751,7 +1726,7 @@ async function loadPreEmploymentSubmissions() {
             return;
         }
 
-        const rows = await readJsonNormalized(res);
+        const rows = await ApiJson.readJsonNormalized(res);
         if (!Array.isArray(rows) || rows.length === 0) {
             submissionStatus.textContent = "No pre-employment submissions yet.";
             return;

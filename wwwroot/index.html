@@ -332,6 +332,7 @@
         </section>
     </main>
 
+    <script src="/scripts/json-utils.js"></script>
     <script>
         const quizList = document.getElementById('quizList');
         const quizCountStat = document.getElementById('quizCountStat');
@@ -354,32 +355,6 @@
         const profileLink = document.getElementById('profileLink');
 
         let quizzes = [];
-
-        function toCamelKey(key) {
-            if (!key || typeof key !== 'string') return key;
-            return key.length === 1 ? key.toLowerCase() : (key[0].toLowerCase() + key.slice(1));
-        }
-
-        function normalizeKeys(value) {
-            if (Array.isArray(value)) {
-                return value.map(normalizeKeys);
-            }
-
-            if (value && typeof value === 'object') {
-                const normalized = {};
-                for (const [key, item] of Object.entries(value)) {
-                    normalized[toCamelKey(key)] = normalizeKeys(item);
-                }
-                return normalized;
-            }
-
-            return value;
-        }
-
-        async function readJsonNormalized(res) {
-            const json = await res.json();
-            return normalizeKeys(json);
-        }
 
         function setStatus(message) {
             status.textContent = message || '';
@@ -416,7 +391,7 @@
                     return;
                 }
 
-                const profile = await readJsonNormalized(res);
+                const profile = await ApiJson.readJsonNormalized(res);
                 const firstName = profile.firstName || '';
                 const lastName = profile.lastName || '';
                 const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.userName || profile.email || 'User';
@@ -437,7 +412,7 @@
                 const res = await fetch('/api/quiz');
                 if (!res.ok) throw new Error('Failed to load quizzes.');
 
-                quizzes = await readJsonNormalized(res);
+                quizzes = await ApiJson.readJsonNormalized(res);
                 renderQuizList();
                 updateSelectionSummary();
                 setStatus(quizzes.length ? 'Select one or more quizzes to build your question pool.' : 'No quizzes are available yet.');

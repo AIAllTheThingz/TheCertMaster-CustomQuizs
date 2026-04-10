@@ -264,21 +264,8 @@
         </div>
     </div>
 
+    <script src="/scripts/json-utils.js"></script>
     <script>
-        function toCamelKey(k) {
-            if (!k || typeof k !== 'string') return k;
-            return k.length === 1 ? k.toLowerCase() : (k[0].toLowerCase() + k.slice(1));
-        }
-        function normalizeKeys(x) {
-            if (Array.isArray(x)) return x.map(normalizeKeys);
-            if (x && typeof x === 'object') {
-                const o = {};
-                for (const [k, v] of Object.entries(x)) o[toCamelKey(k)] = normalizeKeys(v);
-                return o;
-            }
-            return x;
-        }
-
         const api = {
             listCategories: () =>
                 fetch('/api/categories')
@@ -291,13 +278,13 @@
 
                 return fetch(url)
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys);
+                    .then(ApiJson.normalizeKeys);
             },
 
             randomized: (quizId) =>
                 fetch(`/api/quiz/${quizId}/random`)
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys),
+                    .then(ApiJson.normalizeKeys),
 
             generateSelection: (payload) =>
                 fetch('/api/quiz/generate-selection', {
@@ -306,7 +293,7 @@
                     body: JSON.stringify(payload)
                 })
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys),
+                    .then(ApiJson.normalizeKeys),
 
             submit: (quizId, payload) =>
                 fetch(`/api/quiz/${quizId}/submit`, {
@@ -315,7 +302,7 @@
                     body: JSON.stringify(payload)
                 })
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys),
+                    .then(ApiJson.normalizeKeys),
 
             submitSelection: (payload) =>
                 fetch('/api/quiz/submit-selection', {
@@ -324,14 +311,14 @@
                     body: JSON.stringify(payload)
                 })
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys),
+                    .then(ApiJson.normalizeKeys),
 
             getCurrentProgress: () =>
                 fetch('/api/quiz/progress/current', {
                     headers: authHeaders()
                 })
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys),
+                    .then(ApiJson.normalizeKeys),
 
             saveProgress: (payload) =>
                 fetch('/api/quiz/progress', {
@@ -348,7 +335,7 @@
                     headers: authHeaders()
                 })
                     .then(r => r.ok ? r.json() : Promise.reject(r))
-                    .then(normalizeKeys)
+                    .then(ApiJson.normalizeKeys)
         };
 
         const el = (id) => document.getElementById(id);

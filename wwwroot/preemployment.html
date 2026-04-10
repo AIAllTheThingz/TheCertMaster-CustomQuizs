@@ -219,22 +219,8 @@
         </div>
     </div>
 
+    <script src="/scripts/json-utils.js"></script>
     <script>
-        // Normalize JSON keys to camelCase so the UI works regardless of serializer settings.
-        function toCamelKey(k) {
-            if (!k || typeof k !== 'string') return k;
-            return k.length === 1 ? k.toLowerCase() : (k[0].toLowerCase() + k.slice(1));
-        }
-        function normalizeKeys(x) {
-            if (Array.isArray(x)) return x.map(normalizeKeys);
-            if (x && typeof x === 'object') {
-                const o = {};
-                for (const [k, v] of Object.entries(x)) o[toCamelKey(k)] = normalizeKeys(v);
-                return o;
-            }
-            return x;
-        }
-
         function escapeHtml(s) {
             return (s ?? '').toString()
                 .replaceAll('&', '&amp;')
@@ -278,17 +264,17 @@
         const api = {
             getConfig: () => fetch('/api/preemployment/config', { cache: 'no-store' })
                 .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText)))
-                .then(normalizeKeys),
+                .then(ApiJson.normalizeKeys),
             generate: (payload) => fetch('/api/preemployment/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText))).then(normalizeKeys),
+            }).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText))).then(ApiJson.normalizeKeys),
             submit: (payload) => fetch('/api/preemployment/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText))).then(normalizeKeys)
+            }).then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText))).then(ApiJson.normalizeKeys)
         };
 
         let config = {
