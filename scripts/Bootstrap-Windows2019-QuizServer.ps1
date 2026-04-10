@@ -14,7 +14,12 @@ param(
     [string]$Protocol = "http",
     [int]$Port = 80,
     [string]$AppPoolName = "QuizAppPool",
-    [string]$ConnectionString = "Server=.\SQLEXPRESS;Database=QuizDB;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;",
+    [string]$ConnectionString = "",
+    [string]$SqlServerInstance = ".\SQLEXPRESS",
+    [string]$DatabaseName = "QuizDB",
+    [string]$DatabaseBackupPath = "",
+    [ValidateSet("", "overwrite-if-exists", "only-if-empty")]
+    [string]$DatabaseRestoreMode = "",
     [string]$JwtIssuer = "QuizAPI",
     [string]$JwtAudience = "QuizAPIUsers",
     [string]$JwtKey,
@@ -32,9 +37,13 @@ param(
     [switch]$SkipDotNetSdkInstall,
     [switch]$SkipSourceDownload,
     [switch]$SkipTests,
+    [switch]$SkipDatabaseRestore,
     [switch]$SkipDatabaseUpdate,
     [switch]$SkipDeploy,
-    [string]$ReportPath = ""
+    [string]$ReportPath = "",
+    [switch]$PromptForMissingValues,
+    [switch]$SmokeTestAccountCheck,
+    [string]$SmokeTestAdminEmail = "admin@quizapi.local"
 )
 
 $ErrorActionPreference = "Stop"
@@ -105,6 +114,36 @@ function Save-GeneratedJwtKeyFile {
     & icacls $Path /grant:r "Administrators:F" "SYSTEM:F" | Out-Null
 }
 
+function Read-HostWithDefault {
+    param(
+        [string]$Prompt,
+        [string]$DefaultValue = ""
+    )
+
+    $fullPrompt = if ([string]::IsNullOrWhiteSpace($DefaultValue)) {
+        $Prompt
+    }
+    else {
+        "$Prompt [$DefaultValue]"
+    }
+
+    $value = Read-Host -Prompt $fullPrompt
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return $DefaultValue
+    }
+
+    return $value.Trim()
+}
+
+function Build-ConnectionString {
+    param(
+        [string]$ServerInstance,
+        [string]$Database
+    )
+
+    return "Server=$ServerInstance;Database=$Database;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;"
+}
+
 function Prepare-EnvironmentPaths {
     param(
         [string]$DownloadsRootPath,
@@ -112,7 +151,8 @@ function Prepare-EnvironmentPaths {
         [string]$LogRootPath,
         [string]$SiteRootPath,
         [string]$RepoName,
-        [string]$JwtRecoveryPath
+        [string]$JwtRecoveryPath,
+        [string]$BackupFilePath
     )
 
     Write-Step "Preparing environment directories"
@@ -132,6 +172,13 @@ function Prepare-EnvironmentPaths {
         $jwtRecoveryDirectory = Split-Path -Path $JwtRecoveryPath -Parent
         if (-not [string]::IsNullOrWhiteSpace($jwtRecoveryDirectory)) {
             $pathsToPrepare += $jwtRecoveryDirectory
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($BackupFilePath)) {
+        $backupDirectory = Split-Path -Path $BackupFilePath -Parent
+        if (-not [string]::IsNullOrWhiteSpace($backupDirectory)) {
+            $pathsToPrepare += $backupDirectory
         }
     }
 
@@ -205,6 +252,27 @@ function Get-DotNetCommandPath {
     }
 
     throw "Could not locate dotnet.exe. Confirm the .NET SDK is installed."
+}
+
+function Get-SqlCmdPath {
+    $command = Get-Command sqlcmd.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        "C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\180\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\150\Tools\Binn\sqlcmd.exe"
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Could not locate sqlcmd.exe. Install SQL Server command-line tools or SSMS tooling."
 }
 
 function Get-InstalledProductDisplayNames {
@@ -418,6 +486,253 @@ function Install-SqlExpress {
     Invoke-ProcessChecked -FilePath $installerPath -ArgumentList $arguments -StepName "SQL Server Express installation"
 }
 
+function Invoke-SqlCmdQuery {
+    param(
+        [string]$ServerInstance,
+        [string]$Database = "master",
+        [string]$Query
+    )
+
+    $sqlcmdPath = Get-SqlCmdPath
+    $arguments = @("-S", $ServerInstance, "-d", $Database, "-E", "-b", "-W", "-Q", $Query)
+    return & $sqlcmdPath @arguments
+}
+
+function Invoke-SqlCmdScalarLines {
+    param(
+        [string]$ServerInstance,
+        [string]$Database = "master",
+        [string]$Query
+    )
+
+    $sqlcmdPath = Get-SqlCmdPath
+    $arguments = @("-S", $ServerInstance, "-d", $Database, "-E", "-b", "-W", "-h", "-1", "-Q", $Query)
+    $raw = & $sqlcmdPath @arguments
+    return @($raw | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+}
+
+function Test-DatabaseExists {
+    param(
+        [string]$ServerInstance,
+        [string]$Database
+    )
+
+    $rows = Invoke-SqlCmdScalarLines -ServerInstance $ServerInstance -Database "master" -Query "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'$Database') IS NULL THEN '0' ELSE '1' END;"
+    return ($rows | Select-Object -First 1) -eq "1"
+}
+
+function Test-DatabaseHasContent {
+    param(
+        [string]$ServerInstance,
+        [string]$Database
+    )
+
+    if (-not (Test-DatabaseExists -ServerInstance $ServerInstance -Database $Database)) {
+        return $false
+    }
+
+    $query = @"
+SET NOCOUNT ON;
+IF OBJECT_ID(N'dbo.AspNetUsers', N'U') IS NULL OR OBJECT_ID(N'dbo.Quizzes', N'U') IS NULL OR OBJECT_ID(N'dbo.Questions', N'U') IS NULL
+BEGIN
+    SELECT '0';
+END
+ELSE
+BEGIN
+    SELECT CASE
+        WHEN EXISTS (SELECT 1 FROM dbo.AspNetUsers)
+          OR EXISTS (SELECT 1 FROM dbo.Quizzes)
+          OR EXISTS (SELECT 1 FROM dbo.Questions)
+        THEN '1'
+        ELSE '0'
+    END;
+END
+"@
+
+    $rows = Invoke-SqlCmdScalarLines -ServerInstance $ServerInstance -Database $Database -Query $query
+    return ($rows | Select-Object -First 1) -eq "1"
+}
+
+function Get-BackupLogicalFiles {
+    param(
+        [string]$ServerInstance,
+        [string]$BackupPath
+    )
+
+    $escapedBackupPath = $BackupPath.Replace("'", "''")
+    $rows = Invoke-SqlCmdScalarLines -ServerInstance $ServerInstance -Database "master" -Query "RESTORE FILELISTONLY FROM DISK = N'$escapedBackupPath';"
+
+    $dataLogicalName = $null
+    $logLogicalName = $null
+
+    foreach ($row in $rows) {
+        $parts = $row -split '\s{2,}'
+        if ($parts.Count -lt 3) {
+            continue
+        }
+
+        $logicalName = $parts[0].Trim()
+        $type = $parts[2].Trim()
+
+        if ($type -eq "D" -and [string]::IsNullOrWhiteSpace($dataLogicalName)) {
+            $dataLogicalName = $logicalName
+        }
+        elseif ($type -eq "L" -and [string]::IsNullOrWhiteSpace($logLogicalName)) {
+            $logLogicalName = $logicalName
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($dataLogicalName) -or [string]::IsNullOrWhiteSpace($logLogicalName)) {
+        throw "Could not determine logical file names from backup: $BackupPath"
+    }
+
+    return @{
+        Data = $dataLogicalName
+        Log = $logLogicalName
+    }
+}
+
+function Get-SqlDefaultPaths {
+    param([string]$ServerInstance)
+
+    $query = "SET NOCOUNT ON; SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(4000)); SELECT CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(4000));"
+    $rows = Invoke-SqlCmdScalarLines -ServerInstance $ServerInstance -Database "master" -Query $query
+
+    if ($rows.Count -lt 2) {
+        throw "Could not determine SQL Server default data/log paths."
+    }
+
+    return @{
+        Data = $rows[0]
+        Log = $rows[1]
+    }
+}
+
+function Restore-DatabaseFromBackup {
+    param(
+        [string]$ServerInstance,
+        [string]$Database,
+        [string]$BackupPath,
+        [string]$RestoreMode
+    )
+
+    if (-not (Test-Path -LiteralPath $BackupPath)) {
+        throw "Database backup path not found: $BackupPath"
+    }
+
+    $dbExists = Test-DatabaseExists -ServerInstance $ServerInstance -Database $Database
+    $dbHasContent = Test-DatabaseHasContent -ServerInstance $ServerInstance -Database $Database
+
+    if ($RestoreMode -eq "only-if-empty" -and $dbExists -and $dbHasContent) {
+        Write-Step "Skipping database restore because '$Database' already contains data"
+        return
+    }
+
+    Write-Step "Restoring database '$Database' from backup"
+    $paths = Get-SqlDefaultPaths -ServerInstance $ServerInstance
+    Ensure-Directory -Path $paths.Data
+    Ensure-Directory -Path $paths.Log
+
+    $logicalFiles = Get-BackupLogicalFiles -ServerInstance $ServerInstance -BackupPath $BackupPath
+    $mdfPath = Join-Path $paths.Data "$Database.mdf"
+    $ldfPath = Join-Path $paths.Log "${Database}_log.ldf"
+    $escapedBackupPath = $BackupPath.Replace("'", "''")
+    $escapedMdfPath = $mdfPath.Replace("'", "''")
+    $escapedLdfPath = $ldfPath.Replace("'", "''")
+
+    $restoreQuery = @"
+IF DB_ID(N'$Database') IS NOT NULL
+BEGIN
+    ALTER DATABASE [$Database] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+END;
+RESTORE DATABASE [$Database]
+FROM DISK = N'$escapedBackupPath'
+WITH REPLACE, RECOVERY,
+MOVE N'$($logicalFiles.Data)' TO N'$escapedMdfPath',
+MOVE N'$($logicalFiles.Log)' TO N'$escapedLdfPath';
+ALTER DATABASE [$Database] SET MULTI_USER;
+"@
+
+    Invoke-SqlCmdQuery -ServerInstance $ServerInstance -Database "master" -Query $restoreQuery | Out-Host
+}
+
+function Grant-AppPoolDatabaseAccess {
+    param(
+        [string]$ServerInstance,
+        [string]$Database,
+        [string]$AppPool
+    )
+
+    Write-Step "Granting SQL access to IIS app pool identity"
+    $principal = "IIS APPPOOL\$AppPool"
+    $query = @"
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'$principal')
+BEGIN
+    CREATE LOGIN [$principal] FROM WINDOWS;
+END;
+USE [$Database];
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'$principal')
+BEGIN
+    CREATE USER [$principal] FOR LOGIN [$principal];
+END;
+ALTER ROLE [db_owner] ADD MEMBER [$principal];
+"@
+
+    Invoke-SqlCmdQuery -ServerInstance $ServerInstance -Database "master" -Query $query | Out-Host
+}
+
+function Test-SmokeTestAccount {
+    param(
+        [string]$ServerInstance,
+        [string]$Database,
+        [string]$Email
+    )
+
+    Write-Step "Checking smoke test account presence"
+    $rows = Invoke-SqlCmdScalarLines -ServerInstance $ServerInstance -Database $Database -Query "SET NOCOUNT ON; SELECT Email FROM AspNetUsers WHERE Email = N'$Email';"
+    if (($rows | Select-Object -First 1) -ne $Email) {
+        throw "Smoke test account not found in database '$Database': $Email"
+    }
+}
+
+function Resolve-DeploymentInputs {
+    if ($PromptForMissingValues -or [string]::IsNullOrWhiteSpace($SqlServerInstance)) {
+        $script:SqlServerInstance = Read-HostWithDefault -Prompt "SQL Server instance" -DefaultValue $(if ([string]::IsNullOrWhiteSpace($script:SqlServerInstance)) { ".\SQLEXPRESS" } else { $script:SqlServerInstance })
+    }
+
+    if ($PromptForMissingValues -or [string]::IsNullOrWhiteSpace($DatabaseName)) {
+        $script:DatabaseName = Read-HostWithDefault -Prompt "Database name" -DefaultValue $(if ([string]::IsNullOrWhiteSpace($script:DatabaseName)) { "QuizDB" } else { $script:DatabaseName })
+    }
+
+    if ($PromptForMissingValues) {
+        $script:HostName = Read-HostWithDefault -Prompt "Site FQDN or host name (optional for HTTP)" -DefaultValue $script:HostName
+    }
+
+    if ($PromptForMissingValues -or [string]::IsNullOrWhiteSpace($DatabaseRestoreMode)) {
+        $script:DatabaseRestoreMode = Read-HostWithDefault -Prompt "Database restore mode (overwrite-if-exists or only-if-empty)" -DefaultValue $(if ([string]::IsNullOrWhiteSpace($script:DatabaseRestoreMode)) { "overwrite-if-exists" } else { $script:DatabaseRestoreMode })
+    }
+
+    if (-not $SkipDatabaseRestore -and ($PromptForMissingValues -or [string]::IsNullOrWhiteSpace($DatabaseBackupPath))) {
+        $script:DatabaseBackupPath = Read-HostWithDefault -Prompt "Database backup path (.bak)" -DefaultValue $script:DatabaseBackupPath
+    }
+
+    if ([string]::IsNullOrWhiteSpace($DatabaseRestoreMode)) {
+        $script:DatabaseRestoreMode = "overwrite-if-exists"
+    }
+
+    if ($DatabaseRestoreMode -notin @("overwrite-if-exists", "only-if-empty")) {
+        throw "DatabaseRestoreMode must be 'overwrite-if-exists' or 'only-if-empty'."
+    }
+
+    if (-not $SkipDatabaseRestore -and [string]::IsNullOrWhiteSpace($DatabaseBackupPath)) {
+        throw "DatabaseBackupPath is required unless -SkipDatabaseRestore is used."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ConnectionString)) {
+        $script:ConnectionString = Build-ConnectionString -ServerInstance $SqlServerInstance -Database $DatabaseName
+    }
+}
+
 function Expand-RepoZip {
     param(
         [string]$ZipUrl,
@@ -574,8 +889,9 @@ function New-PostInstallReport {
     $runtimeList = @()
 
     try {
-        $sdkList = & dotnet --list-sdks 2>$null
-        $runtimeList = & dotnet --list-runtimes 2>$null
+        $dotnetPath = Get-DotNetCommandPath
+        $sdkList = & $dotnetPath --list-sdks 2>$null
+        $runtimeList = & $dotnetPath --list-runtimes 2>$null
     }
     catch {
     }
@@ -622,6 +938,10 @@ function New-PostInstallReport {
         "- Deployment Zip: $DeploymentZip",
         "- Transcript Log: $TranscriptPath",
         "- SQL Instance: $SqlInstanceName",
+        "- SQL Server Instance: $SqlServerInstance",
+        "- Database Name: $DatabaseName",
+        "- Database Backup Path: $(if ([string]::IsNullOrWhiteSpace($DatabaseBackupPath)) { 'not supplied' } else { $DatabaseBackupPath })",
+        "- Database Restore Mode: $DatabaseRestoreMode",
         "- Connection String: $ConnectionString",
         "- JWT Key Generated By Bootstrap: $JwtKeyGenerated",
         "- JWT Recovery File: $(if ([string]::IsNullOrWhiteSpace($SavedJwtKeyPath)) { 'not written' } else { $SavedJwtKeyPath })",
@@ -630,10 +950,12 @@ function New-PostInstallReport {
         "",
         "- IIS Install Attempted: $(-not $SkipIisInstall)",
         "- SQL Express Install Attempted: $(-not $SkipSqlExpressInstall)",
+        "- Database Restore Attempted: $(-not $SkipDatabaseRestore)",
         "- .NET SDK Install Attempted: $(-not $SkipDotNetSdkInstall)",
         "- Hosting Bundle Install Attempted: $(-not $SkipHostingBundleInstall)",
         "- Database Update Attempted: $(-not $SkipDatabaseUpdate)",
         "- Deploy Attempted: $(-not $SkipDeploy)",
+        "- Smoke Test Account Check: $SmokeTestAccountCheck",
         "",
         "## Prepared Paths",
         "",
@@ -699,6 +1021,8 @@ $timestamp = Get-Timestamp
 $jwtKeyGenerated = $false
 $savedJwtKeyPath = ""
 
+Resolve-DeploymentInputs
+
 Ensure-Directory -Path $DownloadsRoot
 Ensure-Directory -Path $WorkspaceRoot
 Ensure-Directory -Path $LogRoot
@@ -718,7 +1042,8 @@ Prepare-EnvironmentPaths `
     -LogRootPath $LogRoot `
     -SiteRootPath $SitePath `
     -RepoName $RepoFolderName `
-    -JwtRecoveryPath $GeneratedJwtKeyPath
+    -JwtRecoveryPath $GeneratedJwtKeyPath `
+    -BackupFilePath $DatabaseBackupPath
 
 try {
     Start-Transcript -Path $transcriptPath -Force | Out-Null
@@ -772,6 +1097,10 @@ try {
         Install-SqlExpress -DestinationRoot $DownloadsRoot -InstanceName $SqlInstanceName -DownloadUrl $SqlExpressDownloadUrl
     }
 
+    if (-not $SkipDatabaseRestore) {
+        Restore-DatabaseFromBackup -ServerInstance $SqlServerInstance -Database $DatabaseName -BackupPath $DatabaseBackupPath -RestoreMode $DatabaseRestoreMode
+    }
+
     if (-not $SkipSourceDownload) {
         $repoRoot = Expand-RepoZip -ZipUrl $RepoZipUrl -DestinationRoot $WorkspaceRoot -FolderName $RepoFolderName -DownloadRoot $DownloadsRoot
     }
@@ -782,6 +1111,8 @@ try {
     if (-not $SkipDatabaseUpdate) {
         Invoke-DatabaseUpdate -RepoRoot $repoRoot -Connection $ConnectionString
     }
+
+    Grant-AppPoolDatabaseAccess -ServerInstance $SqlServerInstance -Database $DatabaseName -AppPool $AppPoolName
 
     $deploymentZip = Invoke-PublishPackage -RepoRoot $repoRoot -BuildConfiguration $Configuration -OmitTests:$SkipTests
 
@@ -840,6 +1171,10 @@ if (-not $SkipDeploy) {
     $finalUrl += "/"
 
     New-PostInstallReport -DestinationPath $ReportPath -RepoRoot $repoRoot -DeploymentZip $deploymentZip -TranscriptPath $transcriptPath -ApplicationUrl $finalUrl -JwtKeyGenerated:$jwtKeyGenerated -SavedJwtKeyPath $savedJwtKeyPath
+
+    if ($SmokeTestAccountCheck) {
+        Test-SmokeTestAccount -ServerInstance $SqlServerInstance -Database $DatabaseName -Email $SmokeTestAdminEmail
+    }
 
     Write-Step "Bootstrap complete"
     Write-Host "Repository root: $repoRoot"
