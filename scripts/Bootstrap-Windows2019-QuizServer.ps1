@@ -631,7 +631,7 @@ if (-not $SkipDeploy) {
     & $deployScript @deployParams
 }
 
-    $finalUrl = "$Protocol://"
+    $finalUrl = "${Protocol}://"
     if (-not [string]::IsNullOrWhiteSpace($HostName)) {
         $finalUrl += $HostName
     }

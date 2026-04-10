@@ -128,7 +128,7 @@ Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Issuer" -Value $JwtIssue
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Audience" -Value $JwtAudience
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__Key" -Value $JwtKey
 Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Jwt__AccessTokenMinutes" -Value $JwtAccessTokenMinutes.ToString()
-Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Cors__AllowedOrigins__0" -Value ("$Protocol://" + $effectiveHostName + $(if (($Protocol -eq "http" -and $Port -ne 80) -or ($Protocol -eq "https" -and $Port -ne 443)) { ":" + $Port } else { "" }))
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "Cors__AllowedOrigins__0" -Value ("${Protocol}://" + $effectiveHostName + $(if (($Protocol -eq "http" -and $Port -ne 80) -or ($Protocol -eq "https" -and $Port -ne 443)) { ":" + $Port } else { "" }))
 
 if ($Protocol -eq "https" -and -not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
     Write-Step "Ensuring HTTPS certificate binding exists for '$HostName'"
@@ -175,5 +175,5 @@ Start-Website -Name $SiteName
 
 Write-Step "Deployment complete"
 Write-Host "Site Name: $SiteName"
-Write-Host "Application URL: $Protocol://$effectiveHostName$(if (($Protocol -eq 'http' -and $Port -ne 80) -or ($Protocol -eq 'https' -and $Port -ne 443)) { ':' + $Port } else { '' })/"
+Write-Host "Application URL: ${Protocol}://$effectiveHostName$(if (($Protocol -eq 'http' -and $Port -ne 80) -or ($Protocol -eq 'https' -and $Port -ne 443)) { ':' + $Port } else { '' })/"
 Write-Host "Physical Path: $SitePath"
