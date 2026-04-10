@@ -94,6 +94,15 @@ $effectiveHostName = if ([string]::IsNullOrWhiteSpace($HostName)) { "localhost" 
 
 Import-Module WebAdministration
 
+Write-Step "Stopping IIS site and app pool for deployment"
+if (Test-Path "IIS:\Sites\$SiteName") {
+    Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
+}
+
+if (Test-Path "IIS:\AppPools\$AppPoolName") {
+    Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+}
+
 Write-Step "Ensuring deployment path exists"
 Ensure-Directory -Path $SitePath
 
