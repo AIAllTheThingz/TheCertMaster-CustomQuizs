@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Registration</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
     <style>
         :root {
@@ -81,6 +82,17 @@
         }
         .formStatus.ok { color: #1d6b4f; }
         .formStatus.error { color: #a1242f; }
+        .visuallyHidden {
+            position: absolute !important;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
         .authGrid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -233,6 +245,8 @@
                 <hr style="border:0;border-top:1px solid var(--line);margin:18px 0;" />
                 <h2>Change Password</h2>
                 <form id="changePasswordForm">
+                    <label for="changePasswordEmail" class="visuallyHidden">Email</label>
+                    <input id="changePasswordEmail" name="email" type="email" autocomplete="username email" class="visuallyHidden" tabindex="-1" />
                     <label for="currentPassword">Current Password</label>
                     <input id="currentPassword" type="password" autocomplete="current-password" placeholder="Current password" required />
                     <label for="newPassword">New Password</label>
@@ -315,6 +329,7 @@
         const registerLastName = document.getElementById('registerLastName');
         const registerEmail = document.getElementById('registerEmail');
         const loginEmail = document.getElementById('loginEmail');
+        const changePasswordEmail = document.getElementById('changePasswordEmail');
         const editFirstName = document.getElementById('editFirstName');
         const editLastName = document.getElementById('editLastName');
         let currentHistoryPage = 1;
@@ -365,6 +380,15 @@
             if (!value) return '';
             const date = new Date(value);
             return isNaN(date.getTime()) ? value : date.toLocaleString();
+        }
+
+        function tryParseJson(text) {
+            if (!text) return null;
+            try {
+                return JSON.parse(text);
+            } catch {
+                return null;
+            }
         }
 
         const getValue = (obj, ...keys) => ApiJson.getValue(obj, ...keys);
@@ -423,6 +447,7 @@
                 `;
                 editFirstName.value = firstName;
                 editLastName.value = lastName;
+                changePasswordEmail.value = email || userName || '';
                 totalAttempts.textContent = String(totalAttemptCount);
                 averageScore.textContent = `${avgScore}%`;
                 bestScore.textContent = `${topScore}%`;
@@ -514,9 +539,10 @@
                     body: JSON.stringify({ email, password })
                 });
 
-                const payload = await res.json().catch(() => null);
+                const rawText = await res.text();
+                const payload = tryParseJson(rawText);
                 if (!res.ok || !payload?.token) {
-                    setFormStatus(loginStatus, payload?.title || payload?.message || 'Sign-in failed.', true);
+                    setFormStatus(loginStatus, payload?.title || payload?.message || rawText || 'Sign-in failed.', true);
                     return;
                 }
 
