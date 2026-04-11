@@ -99,6 +99,44 @@ function Remove-IisAspNetCoreEnvVarsByPrefix {
     }
 }
 
+function Remove-ConflictingBindings {
+    param(
+        [string]$TargetSiteName,
+        [string]$TargetProtocol,
+        [int]$TargetPort,
+        [string]$TargetHostHeader
+    )
+
+    $normalizedHostHeader = if ([string]::IsNullOrWhiteSpace($TargetHostHeader)) { "" } else { $TargetHostHeader }
+
+    foreach ($site in Get-Website) {
+        if ($site.Name -eq $TargetSiteName) {
+            continue
+        }
+
+        $bindings = Get-WebBinding -Name $site.Name -ErrorAction SilentlyContinue
+        foreach ($binding in @($bindings)) {
+            if ($binding.protocol -ne $TargetProtocol) {
+                continue
+            }
+
+            $bindingParts = $binding.bindingInformation.Split(":")
+            $bindingPort = [int]$bindingParts[1]
+            $bindingHostHeader = if ($bindingParts.Count -gt 2) { $bindingParts[2] } else { "" }
+
+            if ($bindingPort -eq $TargetPort -and $bindingHostHeader -eq $normalizedHostHeader) {
+                Write-Warning "Removing conflicting $TargetProtocol binding from site '$($site.Name)' on port $TargetPort host '$normalizedHostHeader'."
+                Remove-WebBinding -Name $site.Name -Protocol $binding.protocol -Port $bindingPort -HostHeader $bindingHostHeader
+            }
+        }
+
+        $remainingBindings = @(Get-WebBinding -Name $site.Name -ErrorAction SilentlyContinue)
+        if ($remainingBindings.Count -eq 0 -and $site.State -eq 'Started') {
+            Stop-Website -Name $site.Name
+        }
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($JwtKey)) {
     throw "JwtKey is required. Generate one first and pass it with -JwtKey."
 }
@@ -176,6 +214,8 @@ Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name processModel.identityType -V
 Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name autoStart -Value $true
 
 Write-Step "Ensuring dedicated IIS site exists at root"
+Remove-ConflictingBindings -TargetSiteName $SiteName -TargetProtocol $Protocol -TargetPort $Port -TargetHostHeader $HostName
+
 if (-not (Test-Path "IIS:\Sites\$SiteName")) {
     New-Website -Name $SiteName -PhysicalPath $SitePath -ApplicationPool $AppPoolName -Port $Port -HostHeader $HostName | Out-Null
 
@@ -280,8 +320,15 @@ else {
 }
 
 Write-Step "Restarting IIS app pool and site"
-Start-WebAppPool -Name $AppPoolName
-Start-Website -Name $SiteName
+$appPoolState = (Get-WebAppPoolState -Name $AppPoolName).Value
+if ($appPoolState -ne "Started") {
+    Start-WebAppPool -Name $AppPoolName
+}
+
+$siteState = (Get-Website -Name $SiteName).State
+if ($siteState -ne "Started") {
+    Start-Website -Name $SiteName
+}
 
 Write-Step "Deployment complete"
 Write-Host "Site Name: $SiteName"
