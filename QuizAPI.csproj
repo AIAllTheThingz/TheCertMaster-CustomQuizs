@@ -5,7 +5,18 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>QuizAPI-0dc9b559-9ef4-4b8b-b1f8-238fd840e4e2</UserSecretsId>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-public_prod</InformationalVersion>
+    <ReleaseLabel>public_prod</ReleaseLabel>
+    <BuildStamp>2026.04.11</BuildStamp>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="ReleaseLabel" Value="$(ReleaseLabel)" />
+    <AssemblyMetadata Include="BuildStamp" Value="$(BuildStamp)" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="QuizAPI_Source_Code\**\*.cs" />

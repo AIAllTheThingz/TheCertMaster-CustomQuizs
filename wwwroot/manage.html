@@ -962,6 +962,8 @@ const loginForm = document.getElementById("loginForm");
                 { label: "Environment", value: data.environmentName, tone: "good" },
                 { label: "Application", value: data.applicationName, tone: "" },
                 { label: "Version", value: data.informationalVersion || data.version, tone: "" },
+                { label: "Release", value: data.releaseLabel || "(not set)", tone: data.releaseLabel ? "good" : "warn" },
+                { label: "Build Stamp", value: data.buildStamp || "(not set)", tone: data.buildStamp ? "" : "warn" },
                 { label: "Database", value: data.databaseName || "(not detected)", tone: data.databaseName ? "good" : "warn" },
                 { label: "Swagger", value: data.swaggerEnabled ? "Enabled" : "Disabled", tone: data.swaggerEnabled ? "warn" : "good" },
                 { label: "LDAP", value: data.ldapEnabled ? `Enabled${data.ldapHost ? " (" + data.ldapHost + ")" : ""}` : "Disabled", tone: data.ldapEnabled ? "warn" : "good" },
@@ -2819,5 +2821,7 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 </div>
 </div>
+<footer class="app-build-stamp" data-app-version></footer>
+<script src="/scripts/app-version.js"></script>
 </body>
 </html>

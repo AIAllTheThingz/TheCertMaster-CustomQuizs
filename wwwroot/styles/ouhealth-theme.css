@@ -66,3 +66,17 @@ body {
     text-decoration: none;
     filter: brightness(0.98);
 }
+
+.app-build-stamp {
+    display: none;
+    margin: 22px auto 0;
+    padding: 10px 14px;
+    max-width: fit-content;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+}

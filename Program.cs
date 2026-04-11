@@ -250,6 +250,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddScoped<QuizQueryService>();
 builder.Services.AddScoped<QuizImportService>();
 builder.Services.AddScoped<IPreEmploymentConfigStore, FilePreEmploymentConfigStore>();
+builder.Services.AddSingleton<ApplicationVersionInfoService>();
 builder.Services.Configure<ActiveDirectoryOptions>(builder.Configuration.GetSection("ActiveDirectory"));
 builder.Services.AddScoped<IActiveDirectorySettingsStore, FileActiveDirectorySettingsStore>();
 if (OperatingSystem.IsWindows())

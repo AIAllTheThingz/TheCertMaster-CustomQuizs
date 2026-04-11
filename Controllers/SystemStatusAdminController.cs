@@ -1,6 +1,6 @@
-using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using QuizAPI.Services;
 
 namespace QuizAPI.Controllers
 {
@@ -11,21 +11,22 @@ namespace QuizAPI.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
+        private readonly ApplicationVersionInfoService _versionInfo;
 
-        public SystemStatusAdminController(IConfiguration configuration, IWebHostEnvironment environment)
+        public SystemStatusAdminController(
+            IConfiguration configuration,
+            IWebHostEnvironment environment,
+            ApplicationVersionInfoService versionInfo)
         {
             _configuration = configuration;
             _environment = environment;
+            _versionInfo = versionInfo;
         }
 
         [HttpGet]
         public IActionResult Get()
         {
-            var entryAssembly = Assembly.GetEntryAssembly();
-            var version = entryAssembly?.GetName().Version?.ToString() ?? "unknown";
-            var informationalVersion = entryAssembly?
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-                .InformationalVersion ?? version;
+            var versionInfo = _versionInfo.CreateVersionPayload();
 
             var connectionString = _configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
             var databaseName = TryExtractDatabaseName(connectionString);
@@ -38,8 +39,10 @@ namespace QuizAPI.Controllers
                 machineName = Environment.MachineName,
                 environmentName = _environment.EnvironmentName,
                 applicationName = _environment.ApplicationName,
-                version,
-                informationalVersion,
+                version = versionInfo.Version,
+                informationalVersion = versionInfo.InformationalVersion,
+                releaseLabel = versionInfo.ReleaseLabel,
+                buildStamp = versionInfo.BuildStamp,
                 contentRootPath = _environment.ContentRootPath,
                 webRootPath = _environment.WebRootPath ?? string.Empty,
                 databaseName,
