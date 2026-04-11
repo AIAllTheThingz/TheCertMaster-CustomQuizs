@@ -12,11 +12,21 @@ Expected extract location
 
 Required install commands
 1. Open Windows PowerShell as Administrator
-2. Run:
+2. Edit:
+
+   C:\repo\TheCertMaster-CustomQuizs\scripts\production-settings.template.psd1
+
+   Standard packaged installs already include:
+   - BootstrapAdminEmail = admin@quizapi.local
+   - BootstrapAdminPassword = Admin@123
+
+   Change that default password immediately after the first successful login.
+
+3. Run:
 
    powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\ensure-server-prerequisites.ps1
 
-3. Then run:
+4. Then run:
 
    powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\install-production-application.ps1 -SettingsFile C:\repo\TheCertMaster-CustomQuizs\scripts\production-settings.template.psd1
 
@@ -27,6 +37,8 @@ Optional post-install smoke test
 Notes
 - Run the scripts from an elevated PowerShell session.
 - Update production-settings.template.psd1 before install if the hostname, database, or deployment values need to change.
+- The packaged seeded admin account is `admin@quizapi.local` with password `Admin@123`.
+- Change that default password immediately after the first login.
 - The install script performs the deploy and smoke test when enabled in settings.
 - Full setting-by-setting guidance is in:
   Documentation\ProductionSettingsReference.md

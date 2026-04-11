@@ -35,11 +35,14 @@
     # Leave blank to let the installer build a local SQL Express connection string.
     ConnectionString = ''
 
-    # These values seed a fallback local admin account.
-    BootstrapAdminEmail = ''
-    BootstrapAdminPassword = ''
-    BootstrapAdminFirstName = ''
-    BootstrapAdminLastName = ''
+    # The packaged seed database already contains admin@quizapi.local / Admin@123.
+    # Change this password immediately after first login in any real environment.
+    # Keep these values for the standard packaged install, or replace them if you want
+    # the application to create/update a different fallback local admin during startup.
+    BootstrapAdminEmail = 'admin@quizapi.local'
+    BootstrapAdminPassword = 'Admin@123'
+    BootstrapAdminFirstName = 'Server'
+    BootstrapAdminLastName = 'Admin'
 
     ActiveDirectoryEnabled = $false
     ActiveDirectoryDomain = ''

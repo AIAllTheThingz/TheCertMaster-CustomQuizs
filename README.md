@@ -164,48 +164,41 @@ Important:
 
 This is the shortest path to a working server for this repository.
 
-### Automated Bring-Up
+### Packaged Server Install
 
-For a bare Windows Server 2019 machine, the fastest path is the bootstrap script:
+The supported packaged install flow is:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -HostName "quiz.yourdomain.example" `
-  -Protocol "https" `
-  -Port 443 `
-  -CertificateThumbprint "YOUR_CERT_THUMBPRINT"
-```
+1. Extract the release bundle to `C:\repo`
+2. Edit `C:\repo\TheCertMaster-CustomQuizs\scripts\production-settings.template.psd1`
+3. Run `ensure-server-prerequisites.ps1`
+4. Run `install-production-application.ps1`
 
-The bootstrap script can:
-
-- install IIS and required Windows features
-- download and install the current .NET 9 SDK
-- download and install the current .NET 9 ASP.NET Core Hosting Bundle
-- download and install SQL Server 2019 Express
-- download the GitHub repo source zip
-- apply EF Core migrations to create or update the target database
-- build, test, publish, and package the app
-- deploy the published app into IIS using the existing deployment script
-- auto-generate a strong JWT key if `-JwtKey` is omitted
-- write a full PowerShell transcript log under `C:\Deploy\logs`
-- generate a post-install Markdown report with the detected IIS, SQL, and .NET state
-
-If you want a plain HTTP first-pass install before TLS is ready:
+Use Windows PowerShell 5.1 in an elevated session:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -Protocol "http" `
-  -Port 80
+powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\ensure-server-prerequisites.ps1
+powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\install-production-application.ps1 -SettingsFile C:\repo\TheCertMaster-CustomQuizs\scripts\production-settings.template.psd1
 ```
+
+What this install path does:
+
+- installs missing IIS and Windows prerequisites
+- installs the required .NET 9 SDK and Hosting Bundle
+- installs SQL Server Express tooling requirements when needed
+- restores the seeded application database from the packaged backup
+- applies EF Core migrations
+- grants SQL access to the IIS app pool
+- builds and deploys the site into IIS
+- runs the smoke test when enabled in the settings file
 
 Important:
 
 - this automation is written for Windows PowerShell 5.1 and should be run with `powershell.exe`
-- run the bootstrap script from an elevated PowerShell session
-- if SQL Express, IIS, the SDK, or the Hosting Bundle already exist, the script will skip reinstalling them
-- the SQL Express download URL is parameterized and can be overridden if your environment mirrors installers internally
-- use `-SaveGeneratedJwtKey` if you want the bootstrap to keep a recovery copy of an auto-generated JWT key with restricted local ACLs
-- production secrets should still come from secure deployment inputs, not from source control
+- run the scripts from an elevated PowerShell session
+- edit `production-settings.template.psd1` before install
+- the packaged seeded admin account is `admin@quizapi.local` with password `Admin@123`
+- change that default password immediately after the first successful login
+- full setting guidance is in `Documentation/ProductionSettingsReference.md`
 
 ### 1. Prepare Windows
 
@@ -250,9 +243,15 @@ Current local example:
 
 For production, replace that with the real server and database name.
 
-### 4. Clone or Copy the Repository
+### 4. Clone, Copy, or Extract the Repository
 
-On the server or deployment workstation:
+Supported options:
+
+- clone the repo from GitHub
+- copy the repo folder manually
+- extract the packaged release bundle to `C:\repo`
+
+Git example:
 
 ```powershell
 git clone https://github.com/AIAllTheThingz/TheCertMaster-CustomQuizs.git
@@ -392,7 +391,10 @@ In the current local setup:
 ## IIS Deployment Notes
 
 - The app is designed to be served from the root of a site, for example `https://fqdn.com/`
-- For automated provisioning on Windows Server 2019, use `scripts/Bootstrap-Windows2019-QuizServer.ps1`
+- The supported packaged install flow uses:
+  - `scripts/ensure-server-prerequisites.ps1`
+  - `scripts/install-production-application.ps1`
+  - `scripts/post-deploy-smoke-test.ps1`
 - Main pages are served directly from the same application:
   - `/`
   - `/register.html`
@@ -403,6 +405,8 @@ In the current local setup:
 - `App_Data/keys` stores Data Protection keys so auth behavior survives app restarts and IIS recycles
 - if you are moving environments, preserve any needed uploaded content under `wwwroot/uploads`
 - if you are using an existing database, verify schema and migration history carefully before enabling auto-migration
+- standard packaged installs restore the seeded database and include `admin@quizapi.local / Admin@123`
+- change that default password immediately after first login
 
 ## Testing
 

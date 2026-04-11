@@ -134,12 +134,12 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 `BootstrapAdminEmail`
 - Purpose: Fallback local administrator account email.
 - Required: Optional but strongly recommended
-- Notes: If left blank, the installer prompts for it. This account is useful even when LDAP is enabled.
+- Notes: The packaged seed database already includes `admin@quizapi.local`. The standard packaged install template now ships with that value prefilled.
 
 `BootstrapAdminPassword`
 - Purpose: Fallback local administrator account password.
 - Required: Optional but strongly recommended
-- Notes: If left blank, the installer prompts for it.
+- Notes: The standard packaged install template now ships with `Admin@123` for the seeded admin account. Change this password immediately after the first successful login in any real environment.
 
 `BootstrapAdminFirstName`
 - Purpose: Display/profile first name for the fallback admin.
@@ -150,6 +150,15 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 - Purpose: Display/profile last name for the fallback admin.
 - Required: Optional
 - Notes: Cosmetic only.
+
+### Seeded admin behavior
+
+When `RestoreSeedDatabase = $true`, the packaged database already contains a default local administrator account:
+
+- Email: `admin@quizapi.local`
+- Password: `Admin@123`
+
+If you change `BootstrapAdminEmail` to something else, the installer will still try to let the application create that account during startup. If that account does not appear immediately after deployment but the seeded admin exists, the installer now falls back to validating the seeded admin instead of failing the whole install.
 
 ## LDAP / Active Directory settings
 
@@ -220,9 +229,9 @@ For a simple internal/server validation install, the most important values are:
     RestoreSeedDatabase = $true
     DatabaseBackupPath = 'DeploymentBundle\TheCertMasterCorporateDB.bak'
     BootstrapAdminEmail = 'admin@quizapi.local'
-    BootstrapAdminPassword = 'change-this-password'
+    BootstrapAdminPassword = 'Admin@123'
     EnableSmokeTest = $true
 }
 ```
 
-Everything else can usually stay at the default until you need host-header bindings, HTTPS, or LDAP.
+Everything else can usually stay at the default until you need host-header bindings, HTTPS, or LDAP. After the first successful login, change the default seeded admin password immediately.

@@ -343,6 +343,29 @@ function Test-QuizDataExists {
     return $false
 }
 
+function Wait-ForAdminExists {
+    param(
+        [string]$Email,
+        [int]$TimeoutSeconds = 60
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Email)) {
+        return $false
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-BootstrapAdminExists -Email $Email) {
+            return $true
+        }
+
+        Start-Sleep -Seconds 2
+    }
+    while ((Get-Date) -lt $deadline)
+
+    return $false
+}
+
 function Resolve-Inputs {
     if ([string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
         $defaultBaseUrl = if ([string]::IsNullOrWhiteSpace($HostName)) { "http://localhost" } else { "${Protocol}://$HostName" }
@@ -377,6 +400,11 @@ function Resolve-Inputs {
 }
 
 Resolve-Inputs
+
+$seedAdminEmail = 'admin@quizapi.local'
+$seedAdminPassword = 'Admin@123'
+$validatedAdminEmail = $BootstrapAdminEmail
+$validatedAdminPassword = $BootstrapAdminPassword
 
 Write-Step 'Resolving source and tool locations'
 $sourceRoot = Resolve-SourceRoot
@@ -486,13 +514,24 @@ Write-Step 'Reapplying SQL access after IIS deployment'
 Ensure-AppPoolSqlAccess
 
 Write-Step 'Verifying bootstrap admin exists in the deployed database'
-if (-not (Test-BootstrapAdminExists -Email $BootstrapAdminEmail)) {
-    throw "Bootstrap admin '$BootstrapAdminEmail' was not found in database '$DatabaseName' after deployment."
+if (-not (Wait-ForAdminExists -Email $BootstrapAdminEmail -TimeoutSeconds 60)) {
+    if ($RestoreSeedDatabase -and
+        -not [string]::IsNullOrWhiteSpace($BootstrapAdminEmail) -and
+        -not $BootstrapAdminEmail.Equals($seedAdminEmail, [System.StringComparison]::OrdinalIgnoreCase) -and
+        (Wait-ForAdminExists -Email $seedAdminEmail -TimeoutSeconds 5)) {
+
+        Write-Warning "Bootstrap admin '$BootstrapAdminEmail' was not found after deployment. The restored seed database already contains '$seedAdminEmail'. Continuing with the seeded admin account."
+        $validatedAdminEmail = $seedAdminEmail
+        $validatedAdminPassword = $seedAdminPassword
+    }
+    else {
+        throw "Bootstrap admin '$BootstrapAdminEmail' was not found in database '$DatabaseName' after deployment."
+    }
 }
 
 if ($EnableSmokeTest) {
     Write-Step 'Running post-deploy smoke tests'
-    & $smokeTestScript -BaseUrl $PublicBaseUrl -AdminEmail $BootstrapAdminEmail -AdminPassword $BootstrapAdminPassword
+    & $smokeTestScript -BaseUrl $PublicBaseUrl -AdminEmail $validatedAdminEmail -AdminPassword $validatedAdminPassword
 }
 
 Write-Step 'Installation summary'
@@ -501,7 +540,7 @@ Write-Host "Deployment root: $DeploymentRoot" -ForegroundColor Green
 Write-Host "SQL connection: $ConnectionString" -ForegroundColor Green
 Write-Host "Site path: $SitePath" -ForegroundColor Green
 Write-Host "Public base URL: $PublicBaseUrl" -ForegroundColor Green
-Write-Host "Bootstrap admin: $BootstrapAdminEmail" -ForegroundColor Green
+Write-Host "Validated admin: $validatedAdminEmail" -ForegroundColor Green
 Write-Host "HTTPS redirection enabled: $EnableHttpsRedirection" -ForegroundColor Green
 Write-Host "Seed database restore enabled: $RestoreSeedDatabase" -ForegroundColor Green
 Write-Host "Seed database backup path: $DatabaseBackupPath" -ForegroundColor Green

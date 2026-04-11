@@ -1,291 +1,116 @@
 # IIS Production Deployment
 
-This runbook is tailored to this app and your target environment.
+This runbook documents the current supported deployment model for TheCertMaster CustomQuizs.
 
-Automation scripts:
+## Supported Install Flow
 
-- [scripts/Bootstrap-Windows2019-QuizServer.ps1](scripts/Bootstrap-Windows2019-QuizServer.ps1)
-- [scripts/Publish-IISPackage.ps1](scripts/Publish-IISPackage.ps1)
-- [scripts/Deploy-IISProduction.ps1](scripts/Deploy-IISProduction.ps1)
-- [scripts/Get-IISServerInventory.ps1](scripts/Get-IISServerInventory.ps1)
+The supported production-style install path is the packaged source bundle extracted to `C:\repo`, followed by the PowerShell 5.1 deployment scripts in `scripts\`.
 
-## Target Environment
+Use these scripts:
 
-- Server FQDN: `oumwqapptst02.oumed.net`
-- OS: Windows Server 2019
-- IIS: installed
-- .NET Hosting: .NET 9 Hosting Bundle installed
-- SQL Server: SQL Express 2019
-- App Pool Name: `QuizAppPool`
-- App Pool CLR: `No Managed Code`
-- App Pool Pipeline: `Integrated`
-- App Pool Identity: `ApplicationPoolIdentity`
-- IIS Site Physical Path: `C:\sites\QuizAPI\current`
-- HTTPS Binding: port `443`
+- [scripts/ensure-server-prerequisites.ps1](F:\repos\TheCrtMasterCorporate\scripts\ensure-server-prerequisites.ps1)
+- [scripts/install-production-application.ps1](F:\repos\TheCrtMasterCorporate\scripts\install-production-application.ps1)
+- [scripts/post-deploy-smoke-test.ps1](F:\repos\TheCrtMasterCorporate\scripts\post-deploy-smoke-test.ps1)
+- [scripts/production-settings.template.psd1](F:\repos\TheCrtMasterCorporate\scripts\production-settings.template.psd1)
 
-## Deployment Model
+## Target Platform
 
-Deploy this app as its own dedicated IIS site at root.
+- Windows Server 2019 or Windows Server 2022
+- IIS installed
+- SQL Server Express 2019 or newer
+- Windows PowerShell 5.1
 
-Why:
+## Packaged Install Workflow
 
-- the frontend pages use root-relative paths such as `/api/...` and `/styles/...`
-- hosting under a child path like `/quizapi` breaks those URLs unless the app is rewritten for a path base
-- a dedicated IIS site keeps the current app behavior working as designed
+1. Upload and extract the release bundle to `C:\repo`
+2. Edit `C:\repo\TheCertMaster-CustomQuizs\scripts\production-settings.template.psd1`
+3. Open an elevated Windows PowerShell session
+4. Run the prerequisites script
+5. Run the install script
 
-Final expected app URL:
-
-- `https://oumwqapptst02.oumed.net/`
-
-## Deployment Package
-
-Build the deployment zip from the repo first:
+Commands:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-IISPackage.ps1
+powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\ensure-server-prerequisites.ps1
+powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\install-production-application.ps1 -SettingsFile C:\repo\TheCertMaster-CustomQuizs\scripts\production-settings.template.psd1
 ```
 
-This creates a timestamped publish folder and deployment zip under:
-
-- `.\publish\{timestamp}`
-- `.\DeploymentBundle\QuizAPI_IIS_Production_{timestamp}.zip`
-
-## Automated Bare-Server Provisioning
-
-For a fresh Windows Server 2019 host, you can automate the full build-out with:
+Optional manual smoke test:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -HostName "oumwqapptst02.oumed.net" `
-  -Protocol "https" `
-  -Port 443 `
-  -CertificateThumbprint "YOUR_CERT_THUMBPRINT"
+powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\post-deploy-smoke-test.ps1 -BaseUrl http://localhost -AdminEmail admin@quizapi.local -AdminPassword Admin@123
 ```
 
-What the bootstrap does:
+## What the Installer Does
 
-1. installs IIS and required Windows features
-2. downloads and installs the latest .NET 9 SDK from official .NET release metadata
-3. downloads and installs the latest .NET 9 Hosting Bundle from official .NET release metadata
-4. downloads and installs SQL Server 2019 Express if `SQLEXPRESS` is not already present
-5. downloads the repo ZIP from GitHub
-6. runs EF Core migrations against the target connection string
-7. builds, tests, and packages the app
-8. deploys the package into IIS using `Deploy-IISProduction.ps1`
-9. generates a strong JWT signing key automatically if one is not supplied
-10. writes that JWT key into IIS app-level environment variables during deployment
-11. writes a full transcript log under `C:\Deploy\logs`
-12. generates a post-install Markdown report with the detected machine, IIS, SQL, and .NET state
+The install flow:
 
-If you want the bootstrap to keep a locally recoverable copy of the generated JWT key:
+- validates required server prerequisites
+- installs missing .NET 9 SDK and Hosting Bundle components
+- restores the packaged seed database backup
+- applies EF Core migrations
+- ensures SQL access for the IIS app pool
+- builds and publishes the application
+- deploys the app into IIS
+- configures app settings through IIS environment variables
+- runs smoke tests when enabled
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 `
-  -HostName "oumwqapptst02.oumed.net" `
-  -Protocol "https" `
-  -Port 443 `
-  -CertificateThumbprint "YOUR_CERT_THUMBPRINT" `
-  -SaveGeneratedJwtKey
-```
+## Important Settings
 
-This is the preferred path when you are starting from a bare server rather than a pre-prepared IIS machine.
+Before install, review:
 
-Run the automation with Windows PowerShell 5.1:
+- `PublicBaseUrl`
+- `HostName`
+- `Protocol`
+- `SqlInstance`
+- `DatabaseName`
+- `BootstrapAdminEmail`
+- `BootstrapAdminPassword`
 
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\scripts\Bootstrap-Windows2019-QuizServer.ps1 ...
-```
+Full setting guidance is documented in:
 
-## Pre-Deployment Checklist
+- [Documentation/ProductionSettingsReference.md](F:\repos\TheCrtMasterCorporate\Documentation\ProductionSettingsReference.md)
 
-Before deploying, confirm:
+## Seeded Admin Account
 
-1. The old IIS application deployment under `Default Web Site/quizapi` has been removed.
-2. `QuizDB` has already been restored from development and is current.
-3. `IIS APPPOOL\QuizAppPool` has access to `QuizDB`.
-4. The SSL certificate for `oumwqapptst02.oumed.net` is installed in `Cert:\LocalMachine\My`.
-5. Port `443` is available for the dedicated IIS site binding.
-6. The PowerShell session is elevated if you are using the automation scripts.
+The packaged seeded database already contains:
 
-## Step 1: Copy the Zip to the Server
+- Email: `admin@quizapi.local`
+- Password: `Admin@123`
 
-Example destination:
+Important:
 
-```powershell
-C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_YYYYMMDD_HHMMSS.zip
-```
+- this default password should be changed immediately after the first successful login
+- if you keep the standard packaged install values, the installer will validate against this seeded admin account
+- if you choose a different bootstrap admin email, the installer will try to let the application create it during startup
 
-## Step 2: Create the Site Folder and Extract
+## IIS Notes
 
-```powershell
-New-Item -ItemType Directory -Path C:\sites\QuizAPI\current -Force
-Expand-Archive -Path C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_YYYYMMDD_HHMMSS.zip -DestinationPath C:\sites\QuizAPI\current -Force
-```
+- the app is designed to run from the root of an IIS site
+- the deployment script now handles common fresh-server HTTP binding conflicts, including the default IIS site on port `80`
+- runtime folders such as `App_Data`, `wwwroot/uploads`, and `logs` are created automatically
 
-## Step 3: Create Runtime Folders
+## Post-Install Validation
 
-```powershell
-New-Item -ItemType Directory -Path C:\sites\QuizAPI\current\App_Data -Force
-New-Item -ItemType Directory -Path C:\sites\QuizAPI\current\App_Data\keys -Force
-New-Item -ItemType Directory -Path C:\sites\QuizAPI\current\App_Data\uploads -Force
-New-Item -ItemType Directory -Path C:\sites\QuizAPI\current\wwwroot\uploads -Force
-New-Item -ItemType Directory -Path C:\sites\QuizAPI\current\logs -Force
-```
+At minimum, confirm:
 
-## Step 4: Create the Dedicated IIS Site
-
-```powershell
-Import-Module WebAdministration
-New-Website -Name "QuizAPI" -PhysicalPath "C:\sites\QuizAPI\current" -ApplicationPool "QuizAppPool" -Port 443 -Protocol https -HostHeader "oumwqapptst02.oumed.net"
-```
-
-If the site already exists and only needs updating:
-
-```powershell
-Import-Module WebAdministration
-Set-ItemProperty "IIS:\Sites\QuizAPI" -Name physicalPath -Value "C:\sites\QuizAPI\current"
-Set-ItemProperty "IIS:\Sites\QuizAPI" -Name applicationPool -Value "QuizAppPool"
-```
-
-## Step 5: Bind the SSL Certificate
-
-List available machine certificates:
-
-```powershell
-Get-ChildItem Cert:\LocalMachine\My | Select Subject, Thumbprint
-```
-
-Create the site-specific host-header binding:
-
-```powershell
-New-Item "IIS:\SslBindings\0.0.0.0!443!oumwqapptst02.oumed.net" -Thumbprint "YOUR_CERT_THUMBPRINT" -SSLFlags 1
-```
-
-If your environment uses a shared `*:443` binding without SNI, replace it only intentionally.
-
-## Step 6: Set IIS Environment Variables
-
-These values should be stored in IIS configuration, not in appsettings files.
-
-```powershell
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='ASPNETCORE_ENVIRONMENT';value='Production'}
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='ConnectionStrings__DefaultConnection';value='Server=.\SQLEXPRESS;Database=QuizDB;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;'}
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='Jwt__Issuer';value='QuizAPI'}
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='Jwt__Audience';value='QuizAPIUsers'}
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='Jwt__Key';value='PUT_LONG_RANDOM_SECRET_HERE'}
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='Cors__AllowedOrigins__0';value='https://oumwqapptst02.oumed.net'}
-Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location "QuizAPI" -filter "system.webServer/aspNetCore/environmentVariables" -name "." -value @{name='Jwt__AccessTokenMinutes';value='60'}
-```
-
-If the environment variables already exist, update them instead of blindly adding duplicates.
-
-## Step 7: Generate the Production JWT Key
-
-Run this on the server to generate a strong secret:
-
-```powershell
-[Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Maximum 256 }))
-```
-
-Use the output as the value for:
-
-```text
-Jwt__Key
-```
-
-## Step 8: Set File Permissions
-
-Grant the IIS app pool identity the correct access:
-
-```powershell
-icacls C:\sites\QuizAPI\current /grant "IIS AppPool\QuizAppPool:(RX)" /t
-icacls C:\sites\QuizAPI\current\App_Data /grant "IIS AppPool\QuizAppPool:(M)" /t
-icacls C:\sites\QuizAPI\current\wwwroot\uploads /grant "IIS AppPool\QuizAppPool:(M)" /t
-icacls C:\sites\QuizAPI\current\logs /grant "IIS AppPool\QuizAppPool:(M)" /t
-```
-
-This is required because the app writes to:
-
-- `App_Data\keys`
-- `App_Data\uploads`
-- `App_Data\import_history.jsonl`
-- `App_Data\preemployment-config.json`
-- `App_Data\smtp-settings.json`
-- `wwwroot\uploads`
-
-## Step 9: Database
-
-Your production `QuizDB` has already been restored from development.
-
-Because published output does not include the project file required for `dotnet ef`, the deployment script does not attempt to run migrations from the published folder anymore.
-
-If future schema changes require migrations, run them from the source project before or after deployment using the real target connection string.
-
-## Step 10: Start or Recycle IIS
-
-```powershell
-Restart-WebAppPool -Name "QuizAppPool"
-Start-Website -Name "QuizAPI"
-```
-
-If needed:
-
-```powershell
-iisreset
-```
-
-## Step 11: Smoke Test
-
-Test these URLs and flows:
-
-- `https://oumwqapptst02.oumed.net/`
-- `https://oumwqapptst02.oumed.net/upload.html`
-- admin login
-- quiz import
-- SMTP save/test
-- profile login/history
-- pre-employment quiz submission
-- uploaded images
+- `/health` returns `Healthy`
+- admin login works
+- quizzes are present
+- images render
+- management pages load correctly
 
 ## Troubleshooting
 
-### App Fails to Start
+If the app does not come up:
 
-Check:
+1. Check `C:\sites\QuizAPI\current\logs`
+2. Check the Windows Application log
+3. Check IIS AspNetCore Module events
+4. Run the smoke test script again manually
+5. Verify the SQL instance and database name in `production-settings.template.psd1`
 
-1. .NET 9 Hosting Bundle is installed.
-2. `web.config` exists in `C:\sites\QuizAPI\current`.
-3. IIS site `QuizAPI` points to `C:\sites\QuizAPI\current`.
-4. `QuizAppPool` is assigned to the site.
-5. IIS environment variables are present at `QuizAPI`.
-6. SQL connection string is valid.
-7. file permissions are correct.
+If login works but the wrong admin account is expected:
 
-### Enable Stdout Logging Temporarily
-
-In `web.config`, change:
-
-```xml
-stdoutLogEnabled="false"
-```
-
-to:
-
-```xml
-stdoutLogEnabled="true"
-```
-
-Then recycle the app pool, reproduce the issue, inspect:
-
-```text
-C:\sites\QuizAPI\current\logs
-```
-
-After troubleshooting, turn stdout logging back off.
-
-## Official References
-
-- IIS hosting overview: https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-9.0
-- Advanced IIS hosting: https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/advanced?view=aspnetcore-9.0
-- ASP.NET Core IIS `web.config`: https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/web-config?view=aspnetcore-9.0
-- Configuration providers and precedence: https://learn.microsoft.com/en-us/dotnet/core/extensions/configuration-providers
+- remember that the packaged seeded database defaults to `admin@quizapi.local`
+- if you typed a different bootstrap email, the app may still validate against the seeded admin unless your custom bootstrap account was successfully created during startup
