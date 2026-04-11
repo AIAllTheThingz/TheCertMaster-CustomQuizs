@@ -293,6 +293,19 @@ END;
     Invoke-SqlQuery -Query $query | Out-Host
 }
 
+function Ensure-AppPoolExists {
+    Import-Module WebAdministration
+
+    if (-not (Test-Path "IIS:\AppPools\$AppPoolName")) {
+        New-WebAppPool -Name $AppPoolName | Out-Null
+    }
+
+    Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name managedRuntimeVersion -Value ""
+    Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name managedPipelineMode -Value "Integrated"
+    Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name processModel.identityType -Value "ApplicationPoolIdentity"
+    Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name autoStart -Value $true
+}
+
 function Test-BootstrapAdminExists {
     param([string]$Email)
 
@@ -409,6 +422,9 @@ finally {
     Remove-Item Env:\BootstrapAdmin__LastName -ErrorAction SilentlyContinue
 }
 
+Write-Step 'Ensuring IIS app pool identity exists before SQL access is granted'
+Ensure-AppPoolExists
+
 Write-Step 'Granting SQL access to the IIS app pool'
 Ensure-AppPoolSqlAccess
 
@@ -465,6 +481,9 @@ Write-Step 'Deploying application to IIS'
 if ($LASTEXITCODE -ne 0) {
     throw 'Deploy script failed.'
 }
+
+Write-Step 'Reapplying SQL access after IIS deployment'
+Ensure-AppPoolSqlAccess
 
 Write-Step 'Verifying bootstrap admin exists in the deployed database'
 if (-not (Test-BootstrapAdminExists -Email $BootstrapAdminEmail)) {
