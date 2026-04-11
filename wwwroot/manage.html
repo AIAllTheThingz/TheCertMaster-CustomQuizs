@@ -458,6 +458,14 @@ const loginForm = document.getElementById("loginForm");
             if (apiReferenceSection) apiReferenceSection.style.display = "none";
         }
 
+        function handleUnauthorizedAdminSession(message) {
+            localStorage.removeItem("jwtToken");
+            token = null;
+            hideAdminPanels();
+            userList.innerHTML = "";
+            statusBox.textContent = message || "Your admin session expired. Please log in again.";
+        }
+
 
         // Rehydrate session
         if (token) {
@@ -558,6 +566,10 @@ const loginForm = document.getElementById("loginForm");
                 const res = await fetch("/api/files", {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
+                if (res.status === 401) {
+                    handleUnauthorizedAdminSession("Your admin session expired while loading files. Please log in again.");
+                    return;
+                }
                 const files = await res.json();
                 fileList.innerHTML = "";
                 if (!files.length) {
@@ -676,6 +688,10 @@ const loginForm = document.getElementById("loginForm");
                 const res = await fetch("/api/users", {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
+                if (res.status === 401) {
+                    handleUnauthorizedAdminSession("Your admin session expired while loading users. Please log in again.");
+                    return;
+                }
                 if (!res.ok) return;
                 cachedUsers = await ApiJson.readJsonNormalized(res);
                 renderUsers(cachedUsers);
@@ -1278,6 +1294,11 @@ async function loadQuizCreatorPage(page = 1) {
             headers: { "Authorization": "Bearer " + token }
         });
 
+        if (res.status === 401) {
+            handleUnauthorizedAdminSession("Your admin session expired while loading Quiz Creator questions. Please log in again.");
+            return;
+        }
+
         if (!res.ok) {
             const text = await res.text().catch(() => "");
             quizCreatorStatus.textContent = "Failed to load source questions: " + (text || res.status);
@@ -1458,6 +1479,11 @@ async function loadQuestionEditorPage(page = 1) {
         const res = await fetch("/api/admin/question-editor?" + params.toString(), {
             headers: { "Authorization": "Bearer " + token }
         });
+
+        if (res.status === 401) {
+            handleUnauthorizedAdminSession("Your admin session expired while loading Question Editor data. Please log in again.");
+            return;
+        }
 
         if (!res.ok) {
             const text = await res.text().catch(() => "");
