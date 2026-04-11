@@ -69,6 +69,7 @@ namespace QuizAPI.DTO
         public int PageSize { get; set; }
         public int TotalItems { get; set; }
         public int TotalPages { get; set; }
+        public string SearchTerm { get; set; } = string.Empty;
         public List<QuestionEditorItemDto> Items { get; set; } = new();
     }
 
@@ -110,6 +111,7 @@ namespace QuizAPI.DTO
         public int PageSize { get; set; }
         public int TotalItems { get; set; }
         public int TotalPages { get; set; }
+        public string SearchTerm { get; set; } = string.Empty;
         public List<QuizCreatorSourceQuestionDto> Items { get; set; } = new();
     }
 

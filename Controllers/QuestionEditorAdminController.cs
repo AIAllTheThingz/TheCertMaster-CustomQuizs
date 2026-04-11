@@ -20,13 +20,14 @@ namespace QuizAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetQuestions([FromQuery] Guid quizId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetQuestions([FromQuery] Guid quizId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
         {
             if (quizId == Guid.Empty)
                 return BadRequest("QuizId is required.");
 
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
+            var normalizedSearch = (search ?? string.Empty).Trim();
 
             var quiz = await _db.Quizzes
                 .AsNoTracking()
@@ -37,10 +38,19 @@ namespace QuizAPI.Controllers
             if (quiz is null)
                 return NotFound("Quiz not found.");
 
-            var totalItems = await _db.Questions
+            var questionQuery = _db.Questions
                 .AsNoTracking()
-                .Where(q => q.QuizId == quizId)
-                .CountAsync();
+                .Where(q => q.QuizId == quizId);
+
+            if (!string.IsNullOrWhiteSpace(normalizedSearch))
+            {
+                questionQuery = questionQuery.Where(q =>
+                    q.Text.Contains(normalizedSearch) ||
+                    q.Answers.Any(a => a.Text.Contains(normalizedSearch)) ||
+                    q.Images.Any(i => i.FileName.Contains(normalizedSearch)));
+            }
+
+            var totalItems = await questionQuery.CountAsync();
 
             var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
             if (totalPages > 0 && page > totalPages)
@@ -48,9 +58,7 @@ namespace QuizAPI.Controllers
                 page = totalPages;
             }
 
-            var questions = await _db.Questions
-                .AsNoTracking()
-                .Where(q => q.QuizId == quizId)
+            var questions = await questionQuery
                 .Include(q => q.Answers.OrderBy(a => a.OrderIndex).ThenBy(a => a.Text))
                 .Include(q => q.Images)
                 .OrderBy(q => q.OrderIndex)
@@ -88,6 +96,7 @@ namespace QuizAPI.Controllers
                 PageSize = pageSize,
                 TotalItems = totalItems,
                 TotalPages = totalPages,
+                SearchTerm = normalizedSearch,
                 Items = questions
             });
         }

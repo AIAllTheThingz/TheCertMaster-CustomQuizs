@@ -382,12 +382,14 @@ const loginForm = document.getElementById("loginForm");
         let cachedUsers = [];
         let questionEditorState = {
             quizId: "",
+            search: "",
             page: 1,
             pageSize: 10,
             totalPages: 0
         };
         let quizCreatorState = {
             quizId: "",
+            search: "",
             page: 1,
             pageSize: 10,
             totalPages: 0,
@@ -914,6 +916,8 @@ function getDashboardEls() {
         quizStatus: document.getElementById("quizStatus"),
         quizTbody: document.getElementById("quizTbody"),
         questionEditorQuizSelect: document.getElementById("questionEditorQuizSelect"),
+        questionEditorSearch: document.getElementById("questionEditorSearch"),
+        questionEditorSearchBtn: document.getElementById("questionEditorSearchBtn"),
         questionEditorRefreshBtn: document.getElementById("questionEditorRefreshBtn"),
         questionEditorStatus: document.getElementById("questionEditorStatus"),
         questionEditorPager: document.getElementById("questionEditorPager"),
@@ -922,6 +926,8 @@ function getDashboardEls() {
         questionEditorNextBtn: document.getElementById("questionEditorNextBtn"),
         questionEditorTbody: document.getElementById("questionEditorTbody"),
         quizCreatorQuizSelect: document.getElementById("quizCreatorQuizSelect"),
+        quizCreatorSearch: document.getElementById("quizCreatorSearch"),
+        quizCreatorSearchBtn: document.getElementById("quizCreatorSearchBtn"),
         quizCreatorRefreshBtn: document.getElementById("quizCreatorRefreshBtn"),
         quizCreatorStatus: document.getElementById("quizCreatorStatus"),
         quizCreatorTbody: document.getElementById("quizCreatorTbody"),
@@ -1237,10 +1243,11 @@ function renderQuizCreatorQuestionTable(pageData) {
 }
 
 async function loadQuizCreatorPage(page = 1) {
-    const { quizCreatorQuizSelect, quizCreatorStatus, quizCreatorTbody, quizCreatorPager } = getDashboardEls();
-    if (!quizCreatorQuizSelect || !quizCreatorStatus || !quizCreatorTbody || !quizCreatorPager) return;
+    const { quizCreatorQuizSelect, quizCreatorSearch, quizCreatorStatus, quizCreatorTbody, quizCreatorPager } = getDashboardEls();
+    if (!quizCreatorQuizSelect || !quizCreatorSearch || !quizCreatorStatus || !quizCreatorTbody || !quizCreatorPager) return;
 
     quizCreatorState.quizId = quizCreatorQuizSelect.value || "";
+    quizCreatorState.search = (quizCreatorSearch.value || "").trim();
     quizCreatorState.page = page;
 
     if (!token) {
@@ -1263,7 +1270,8 @@ async function loadQuizCreatorPage(page = 1) {
         const params = new URLSearchParams({
             quizId: quizCreatorState.quizId,
             page: String(page),
-            pageSize: String(quizCreatorState.pageSize)
+            pageSize: String(quizCreatorState.pageSize),
+            search: quizCreatorState.search
         });
 
         const res = await fetch("/api/admin/quiz-creator/source-questions?" + params.toString(), {
@@ -1416,10 +1424,11 @@ function renderQuestionEditorTable(pageData) {
 }
 
 async function loadQuestionEditorPage(page = 1) {
-    const { questionEditorQuizSelect, questionEditorStatus, questionEditorTbody, questionEditorPager } = getDashboardEls();
-    if (!questionEditorQuizSelect || !questionEditorStatus || !questionEditorTbody || !questionEditorPager) return;
+    const { questionEditorQuizSelect, questionEditorSearch, questionEditorStatus, questionEditorTbody, questionEditorPager } = getDashboardEls();
+    if (!questionEditorQuizSelect || !questionEditorSearch || !questionEditorStatus || !questionEditorTbody || !questionEditorPager) return;
 
     questionEditorState.quizId = questionEditorQuizSelect.value || "";
+    questionEditorState.search = (questionEditorSearch.value || "").trim();
     questionEditorState.page = page;
 
     if (!token) {
@@ -1442,7 +1451,8 @@ async function loadQuestionEditorPage(page = 1) {
         const params = new URLSearchParams({
             quizId: questionEditorState.quizId,
             page: String(page),
-            pageSize: String(questionEditorState.pageSize)
+            pageSize: String(questionEditorState.pageSize),
+            search: questionEditorState.search
         });
 
         const res = await fetch("/api/admin/question-editor?" + params.toString(), {
@@ -1791,11 +1801,15 @@ function wireDashboardButtonsOnce() {
     const {
         refreshQuizzesBtn,
         questionEditorQuizSelect,
+        questionEditorSearch,
+        questionEditorSearchBtn,
         questionEditorRefreshBtn,
         questionEditorPrevBtn,
         questionEditorNextBtn,
         questionEditorTbody,
         quizCreatorQuizSelect,
+        quizCreatorSearch,
+        quizCreatorSearchBtn,
         quizCreatorRefreshBtn,
         quizCreatorPrevBtn,
         quizCreatorNextBtn,
@@ -1824,6 +1838,21 @@ function wireDashboardButtonsOnce() {
     if (questionEditorRefreshBtn && !questionEditorRefreshBtn.dataset.wired) {
         questionEditorRefreshBtn.dataset.wired = "1";
         questionEditorRefreshBtn.addEventListener("click", () => loadQuestionEditorPage(questionEditorState.page || 1));
+    }
+
+    if (questionEditorSearch && !questionEditorSearch.dataset.wired) {
+        questionEditorSearch.dataset.wired = "1";
+        questionEditorSearch.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                loadQuestionEditorPage(1);
+            }
+        });
+    }
+
+    if (questionEditorSearchBtn && !questionEditorSearchBtn.dataset.wired) {
+        questionEditorSearchBtn.dataset.wired = "1";
+        questionEditorSearchBtn.addEventListener("click", () => loadQuestionEditorPage(1));
     }
 
     if (questionEditorPrevBtn && !questionEditorPrevBtn.dataset.wired) {
@@ -1861,6 +1890,21 @@ function wireDashboardButtonsOnce() {
     if (quizCreatorRefreshBtn && !quizCreatorRefreshBtn.dataset.wired) {
         quizCreatorRefreshBtn.dataset.wired = "1";
         quizCreatorRefreshBtn.addEventListener("click", () => loadQuizCreatorPage(quizCreatorState.page || 1));
+    }
+
+    if (quizCreatorSearch && !quizCreatorSearch.dataset.wired) {
+        quizCreatorSearch.dataset.wired = "1";
+        quizCreatorSearch.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                loadQuizCreatorPage(1);
+            }
+        });
+    }
+
+    if (quizCreatorSearchBtn && !quizCreatorSearchBtn.dataset.wired) {
+        quizCreatorSearchBtn.dataset.wired = "1";
+        quizCreatorSearchBtn.addEventListener("click", () => loadQuizCreatorPage(1));
     }
 
     if (quizCreatorPrevBtn && !quizCreatorPrevBtn.dataset.wired) {
@@ -2160,6 +2204,13 @@ document.addEventListener("DOMContentLoaded", () => {
             </select>
         </div>
         <div>
+            <label for="questionEditorSearch">Search questions</label><br />
+            <input id="questionEditorSearch" type="text" placeholder="Search question text, answers, or image key" style="min-width:340px;" />
+        </div>
+        <div>
+            <button id="questionEditorSearchBtn" type="button">Search</button>
+        </div>
+        <div>
             <button id="questionEditorRefreshBtn" type="button">Load questions</button>
         </div>
     </div>
@@ -2191,6 +2242,13 @@ document.addEventListener("DOMContentLoaded", () => {
             <select id="quizCreatorQuizSelect" style="min-width:340px;">
                 <option value="">Select a Basic quiz</option>
             </select>
+        </div>
+        <div>
+            <label for="quizCreatorSearch">Search source questions</label><br />
+            <input id="quizCreatorSearch" type="text" placeholder="Search question text or answers" style="min-width:340px;" />
+        </div>
+        <div>
+            <button id="quizCreatorSearchBtn" type="button">Search</button>
         </div>
         <div>
             <button id="quizCreatorRefreshBtn" type="button">Load questions</button>
@@ -2319,6 +2377,9 @@ document.addEventListener("DOMContentLoaded", () => {
     <hr />
     <h2>API Reference</h2>
     <p class="muted">The production API tools now live under Management. Use the embedded Swagger reference below for the full authenticated API surface.</p>
+    <div class="muted" style="margin-top:10px; line-height:1.55;">
+        <strong>Production troubleshooting:</strong> Swagger should normally stay off in production. To enable it temporarily for diagnostics, set the IIS app setting or environment variable <code>Swagger__Enabled=true</code>, restart the site or app pool, use the reference below, then turn it back off when troubleshooting is complete.
+    </div>
     <div class="swaggerWrap">
         <div class="swaggerHead">
             <strong>Swagger Reference</strong>
