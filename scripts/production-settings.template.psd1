@@ -1,6 +1,8 @@
 @{
+    # Root working folder used by the install scripts for tools, temp files, and artifacts.
     DeploymentRoot = 'C:\Deployment'
 
+    # IIS site and app pool settings.
     SiteName = 'QuizAPI'
     AppPoolName = 'QuizAppPool'
     SitePath = 'C:\sites\QuizAPI\current'
@@ -8,9 +10,15 @@
     HttpPort = 80
     HttpsPort = 443
 
-    # Default Windows Server 2022 host baseline for the first HTTP rollout.
-    HostName = 'WIN2K22IIS01'
-    PublicBaseUrl = 'http://WIN2K22IIS01'
+    # Set HostName to the server DNS name or FQDN when you want IIS host-header bindings.
+    # Leave blank for first-time HTTP installs if you want to access the site by localhost or server IP.
+    HostName = ''
+
+    # Public URL used by the post-deploy smoke test.
+    # Example: 'http://server01' or 'https://quiz.company.com'
+    PublicBaseUrl = 'http://localhost'
+
+    # Keep false for HTTP installs. Set true only when deploying behind HTTPS.
     EnableHttpsRedirection = $false
 
     # Leave blank to auto-generate a strong key during install.
@@ -27,10 +35,11 @@
     # Leave blank to let the installer build a local SQL Express connection string.
     ConnectionString = ''
 
-    BootstrapAdminEmail = 'admin@quizapi.local'
-    BootstrapAdminPassword = 'Admin@123'
-    BootstrapAdminFirstName = 'Server'
-    BootstrapAdminLastName = 'Admin'
+    # These values seed a fallback local admin account.
+    BootstrapAdminEmail = ''
+    BootstrapAdminPassword = ''
+    BootstrapAdminFirstName = ''
+    BootstrapAdminLastName = ''
 
     ActiveDirectoryEnabled = $false
     ActiveDirectoryDomain = ''
