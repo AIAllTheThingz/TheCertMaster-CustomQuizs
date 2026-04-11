@@ -277,6 +277,45 @@
         </form>
     </div>
 
+    <div id="ldapSettings" style="display:none;">
+        <h3>LDAP Settings</h3>
+        <div class="muted" style="margin-bottom:8px;">Configure employee and admin sign-in against LDAP/Active Directory. Local application accounts remain available as fallback.</div>
+        <form id="ldapForm">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+                <div>
+                    <label>LDAP Host</label><br/>
+                    <input type="text" id="ldapHost" placeholder="ldap.fqdn.com" style="min-width:240px;" />
+                </div>
+                <div>
+                    <label>LDAP Port</label><br/>
+                    <input type="number" id="ldapPort" min="0" value="389" style="width:120px;" />
+                </div>
+                <div>
+                    <label>LDAPS Port</label><br/>
+                    <input type="number" id="ldapSslPort" min="0" value="636" style="width:120px;" />
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:22px;">
+                    <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="ldapEnabled" /> Enable LDAP login</label>
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:flex-end;">
+                <div style="flex:1 1 320px;">
+                    <label>Admin Group Names</label><br/>
+                    <input type="text" id="ldapAdminGroups" placeholder="TCM_Admins, Domain Admins" style="width:100%;" />
+                </div>
+                <div style="flex:1 1 320px;">
+                    <label>User Group Names</label><br/>
+                    <input type="text" id="ldapUserGroups" placeholder="TCM_Users" style="width:100%;" />
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:center;">
+                <button type="submit">Save LDAP</button>
+                <button type="button" id="ldapReloadBtn">Reload</button>
+                <span class="muted" id="ldapStatus"></span>
+            </div>
+        </form>
+    </div>
+
     <div id="preEmploymentSettings" style="display:none;">
         <h3>Pre-Employment Quiz Setup</h3>
         <div class="muted" style="margin-bottom:8px;">Choose one or more imported exam titles and how many random questions to pull from each selected exam. Candidates will run this saved configuration from the pre-employment page.</div>
@@ -331,6 +370,7 @@ const loginForm = document.getElementById("loginForm");
         const fileList = document.getElementById("fileList");
         const userManager = document.getElementById("userManager");   // only once
         const smtpSettings = document.getElementById("smtpSettings");
+        const ldapSettings = document.getElementById("ldapSettings");
         const preEmploymentSettings = document.getElementById("preEmploymentSettings");
         let quizSection = null;
         let historySection = null;
@@ -353,6 +393,15 @@ const loginForm = document.getElementById("loginForm");
         const smtpTestBtn = document.getElementById("smtpTestBtn");
         const smtpStatus = document.getElementById("smtpStatus");
         const smtpForm = document.getElementById("smtpForm");
+        const ldapHost = document.getElementById("ldapHost");
+        const ldapPort = document.getElementById("ldapPort");
+        const ldapSslPort = document.getElementById("ldapSslPort");
+        const ldapEnabled = document.getElementById("ldapEnabled");
+        const ldapAdminGroups = document.getElementById("ldapAdminGroups");
+        const ldapUserGroups = document.getElementById("ldapUserGroups");
+        const ldapReloadBtn = document.getElementById("ldapReloadBtn");
+        const ldapStatus = document.getElementById("ldapStatus");
+        const ldapForm = document.getElementById("ldapForm");
         const userList = document.getElementById("userList");
         const userSearch = document.getElementById("userSearch");
         const preEmploymentForm = document.getElementById("preEmploymentForm");
@@ -431,6 +480,7 @@ const loginForm = document.getElementById("loginForm");
             fileTable.style.display = "block";
             userManager.style.display = "block";
             smtpSettings.style.display = "block";
+            ldapSettings.style.display = "block";
             preEmploymentSettings.style.display = "block";
             if (quizSection) quizSection.style.display = "block";
             if (questionEditorSection) questionEditorSection.style.display = "block";
@@ -448,6 +498,7 @@ const loginForm = document.getElementById("loginForm");
             fileTable.style.display = "none";
             userManager.style.display = "none";
             smtpSettings.style.display = "none";
+            ldapSettings.style.display = "none";
             preEmploymentSettings.style.display = "none";
             if (quizSection) quizSection.style.display = "none";
             if (questionEditorSection) questionEditorSection.style.display = "none";
@@ -500,6 +551,7 @@ const loginForm = document.getElementById("loginForm");
                 showAdminPanels();
                 loadFiles();
                 loadSmtpSettings();
+                loadLdapSettings();
                 loadUsers();
                 loadQuizCategories();
                 loadQuizzes();
@@ -767,6 +819,73 @@ const loginForm = document.getElementById("loginForm");
             }
         }
 
+        async function loadLdapSettings() {
+            if (!token) return;
+            try {
+                ldapStatus.textContent = 'Loading...';
+                const res = await fetch('/api/admin/active-directory', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) {
+                    handleUnauthorizedAdminSession("Your admin session expired while loading LDAP settings. Please log in again.");
+                    return;
+                }
+                if (!res.ok) {
+                    const t = await res.text();
+                    ldapStatus.textContent = 'Failed to load LDAP: ' + t;
+                    return;
+                }
+                const s = await ApiJson.readJsonNormalized(res);
+                ldapEnabled.checked = !!s.enabled;
+                ldapHost.value = s.host ?? '';
+                ldapPort.value = s.port ?? 389;
+                ldapSslPort.value = s.sslPort ?? 636;
+                ldapAdminGroups.value = Array.isArray(s.adminGroups) ? s.adminGroups.join(', ') : '';
+                ldapUserGroups.value = Array.isArray(s.userGroups) ? s.userGroups.join(', ') : '';
+                ldapStatus.textContent = 'Loaded.';
+            } catch (err) {
+                console.error(err);
+                ldapStatus.textContent = 'Error loading LDAP (see console).';
+            }
+        }
+
+        async function saveLdapSettings() {
+            if (!token) return;
+            try {
+                ldapStatus.textContent = 'Saving...';
+                const payload = {
+                    enabled: !!ldapEnabled.checked,
+                    host: ldapHost.value.trim(),
+                    port: parseInt(ldapPort.value || '0', 10),
+                    sslPort: parseInt(ldapSslPort.value || '0', 10),
+                    adminGroups: ldapAdminGroups.value.trim(),
+                    userGroups: ldapUserGroups.value.trim()
+                };
+                const res = await fetch('/api/admin/active-directory', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (res.status === 401) {
+                    handleUnauthorizedAdminSession("Your admin session expired while saving LDAP settings. Please log in again.");
+                    return;
+                }
+                if (!res.ok) {
+                    const t = await res.text();
+                    ldapStatus.textContent = 'Save failed: ' + t;
+                    return;
+                }
+                ldapStatus.textContent = 'Saved.';
+                await loadLdapSettings();
+            } catch (err) {
+                console.error(err);
+                ldapStatus.textContent = 'Error saving LDAP (see console).';
+            }
+        }
+
         async function testSmtp() {
             if (!token) return;
             const to = (smtpTestTo.value || '').trim();
@@ -804,6 +923,13 @@ const loginForm = document.getElementById("loginForm");
         }
         if (smtpReloadBtn) smtpReloadBtn.addEventListener('click', loadSmtpSettings);
         if (smtpTestBtn) smtpTestBtn.addEventListener('click', testSmtp);
+        if (ldapForm) {
+            ldapForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await saveLdapSettings();
+            });
+        }
+        if (ldapReloadBtn) ldapReloadBtn.addEventListener('click', loadLdapSettings);
         if (preEmploymentReloadBtn) preEmploymentReloadBtn.addEventListener('click', loadPreEmploymentConfig);
         if (preEmploymentForm) {
             preEmploymentForm.addEventListener("submit", async (e) => {
@@ -2173,6 +2299,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadFiles();
         loadUsers();
         loadSmtpSettings();
+        loadLdapSettings();
         loadQuizCategories();
         loadQuizzes();
         loadImportHistory();

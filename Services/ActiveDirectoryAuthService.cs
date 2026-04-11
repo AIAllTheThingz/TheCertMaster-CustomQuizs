@@ -1,4 +1,5 @@
-using System.DirectoryServices.AccountManagement;
+using System.DirectoryServices.Protocols;
+using System.Net;
 using System.Runtime.Versioning;
 
 namespace QuizAPI.Services
@@ -6,98 +7,152 @@ namespace QuizAPI.Services
     [SupportedOSPlatform("windows")]
     public sealed class ActiveDirectoryAuthService : IActiveDirectoryAuthService
     {
-        private readonly ActiveDirectoryOptions _options;
+        private readonly IActiveDirectorySettingsStore _settingsStore;
         private readonly ILogger<ActiveDirectoryAuthService> _logger;
 
         public ActiveDirectoryAuthService(
-            Microsoft.Extensions.Options.IOptions<ActiveDirectoryOptions> options,
+            IActiveDirectorySettingsStore settingsStore,
             ILogger<ActiveDirectoryAuthService> logger)
         {
-            _options = options.Value;
+            _settingsStore = settingsStore;
             _logger = logger;
         }
 
-        public Task<ActiveDirectoryAuthResult?> AuthenticateAsync(string login, string password, CancellationToken cancellationToken = default)
+        public async Task<ActiveDirectoryAuthResult?> AuthenticateAsync(string login, string password, CancellationToken cancellationToken = default)
         {
-            if (!OperatingSystem.IsWindows() || !_options.Enabled || string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
+            if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
             {
-                return Task.FromResult<ActiveDirectoryAuthResult?>(null);
+                return null;
             }
 
-            return Task.Run(() => AuthenticateInternal(login.Trim(), password), cancellationToken);
+            var options = await _settingsStore.GetAsync();
+            if (!options.Enabled)
+            {
+                return null;
+            }
+
+            return await Task.Run(() => AuthenticateInternal(options, login.Trim(), password), cancellationToken);
         }
 
-        private ActiveDirectoryAuthResult? AuthenticateInternal(string login, string password)
+        private ActiveDirectoryAuthResult? AuthenticateInternal(ActiveDirectoryOptions options, string login, string password)
         {
             try
             {
-                using var context = CreatePrincipalContext();
-                var credential = BuildCredentialCandidates(login)
-                    .FirstOrDefault(candidate => context.ValidateCredentials(candidate, password, ContextOptions.Negotiate));
-
-                if (string.IsNullOrWhiteSpace(credential))
+                foreach (var endpoint in BuildEndpoints(options))
                 {
-                    return null;
+                    foreach (var credential in BuildCredentialCandidates(options, login))
+                    {
+                        var result = TryAuthenticateAgainstEndpoint(options, endpoint, login, credential, password);
+                        if (result != null)
+                        {
+                            return result;
+                        }
+                    }
                 }
 
-                using var principal = FindUserPrincipal(context, login, credential);
-                if (principal is null)
-                {
-                    _logger.LogWarning("Active Directory credentials validated for {Login}, but no principal could be loaded.", login);
-                    return null;
-                }
-
-                var email = (principal.EmailAddress ?? login).Trim();
-                var groups = GetGroupNames(principal);
-                var roles = MapRoles(groups);
-
-                if (_options.RequireMappedRole && roles.Count == 0)
-                {
-                    _logger.LogWarning("Active Directory user {Login} authenticated but no mapped application role was found.", login);
-                    return null;
-                }
-
-                return new ActiveDirectoryAuthResult
-                {
-                    Email = email,
-                    UserName = string.IsNullOrWhiteSpace(principal.UserPrincipalName) ? email : principal.UserPrincipalName,
-                    FirstName = principal.GivenName ?? string.Empty,
-                    LastName = principal.Surname ?? string.Empty,
-                    Groups = groups,
-                    Roles = roles
-                };
+                return null;
             }
-            catch (PrincipalServerDownException ex)
+            catch (LdapException ex)
             {
-                _logger.LogError(ex, "Active Directory server is unavailable.");
+                _logger.LogError(ex, "LDAP server is unavailable.");
                 return null;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Active Directory authentication failed unexpectedly for {Login}.", login);
+                _logger.LogError(ex, "LDAP authentication failed unexpectedly for {Login}.", login);
                 return null;
             }
         }
 
-        private PrincipalContext CreatePrincipalContext()
+        private ActiveDirectoryAuthResult? TryAuthenticateAgainstEndpoint(ActiveDirectoryOptions options, LdapEndpoint endpoint, string login, string credential, string password)
         {
-            var domain = string.IsNullOrWhiteSpace(_options.Domain) ? null : _options.Domain.Trim();
-            var container = string.IsNullOrWhiteSpace(_options.Container) ? null : _options.Container.Trim();
-
-            if (string.IsNullOrWhiteSpace(domain) && string.IsNullOrWhiteSpace(container))
+            using var connection = CreateConnection(endpoint);
+            try
             {
-                return new PrincipalContext(ContextType.Domain);
+                connection.Bind(new NetworkCredential(credential, password));
+            }
+            catch (LdapException)
+            {
+                return null;
             }
 
-            if (string.IsNullOrWhiteSpace(container))
+            var searchBase = string.IsNullOrWhiteSpace(options.Container)
+                ? GetDefaultNamingContext(connection)
+                : options.Container.Trim();
+
+            var entry = FindUserEntry(connection, searchBase, login, credential);
+            if (entry is null)
             {
-                return new PrincipalContext(ContextType.Domain, domain);
+                _logger.LogWarning("LDAP credentials validated for {Login}, but no principal could be loaded.", login);
+                return null;
             }
 
-            return new PrincipalContext(ContextType.Domain, domain, container);
+            var email = GetAttribute(entry, "mail");
+            var userPrincipalName = GetAttribute(entry, "userPrincipalName");
+            var firstName = GetAttribute(entry, "givenName");
+            var lastName = GetAttribute(entry, "sn");
+            var groups = GetGroupNames(entry);
+            var roles = MapRoles(options, groups);
+
+            if (options.RequireMappedRole && roles.Count == 0)
+            {
+                _logger.LogWarning("LDAP user {Login} authenticated but no mapped application role was found.", login);
+                return null;
+            }
+
+            return new ActiveDirectoryAuthResult
+            {
+                Email = string.IsNullOrWhiteSpace(email) ? login : email,
+                UserName = string.IsNullOrWhiteSpace(userPrincipalName) ? login : userPrincipalName,
+                FirstName = firstName ?? string.Empty,
+                LastName = lastName ?? string.Empty,
+                Groups = groups,
+                Roles = roles
+            };
         }
 
-        private IEnumerable<string> BuildCredentialCandidates(string login)
+        private static LdapConnection CreateConnection(LdapEndpoint endpoint)
+        {
+            var identifier = new LdapDirectoryIdentifier(endpoint.Host, endpoint.Port);
+            var connection = new LdapConnection(identifier)
+            {
+                AuthType = AuthType.Negotiate,
+                Timeout = TimeSpan.FromSeconds(10)
+            };
+            connection.SessionOptions.ProtocolVersion = 3;
+            connection.SessionOptions.ReferralChasing = ReferralChasingOptions.None;
+            connection.SessionOptions.SecureSocketLayer = endpoint.UseSsl;
+            return connection;
+        }
+
+        private static IEnumerable<LdapEndpoint> BuildEndpoints(ActiveDirectoryOptions options)
+        {
+            var endpoints = new List<LdapEndpoint>();
+            var host = string.IsNullOrWhiteSpace(options.Host) ? options.Domain.Trim() : options.Host.Trim();
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                yield break;
+            }
+
+            if (options.SslPort > 0)
+            {
+                endpoints.Add(new LdapEndpoint(host, options.SslPort, true));
+            }
+
+            if (options.Port > 0)
+            {
+                endpoints.Add(new LdapEndpoint(host, options.Port, false));
+            }
+
+            foreach (var endpoint in endpoints
+                .GroupBy(x => $"{x.Host}:{x.Port}:{x.UseSsl}")
+                .Select(x => x.First()))
+            {
+                yield return endpoint;
+            }
+        }
+
+        private static IEnumerable<string> BuildCredentialCandidates(ActiveDirectoryOptions options, string login)
         {
             var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -117,15 +172,15 @@ namespace QuizAPI.Services
 
             AddCandidate(localPart);
 
-            if (!string.IsNullOrWhiteSpace(_options.NetBiosDomain))
+            if (!string.IsNullOrWhiteSpace(options.NetBiosDomain))
             {
-                AddCandidate($"{_options.NetBiosDomain.Trim()}\\{localPart}");
+                AddCandidate($"{options.NetBiosDomain.Trim()}\\{localPart}");
             }
 
-            var upnSuffix = !string.IsNullOrWhiteSpace(_options.UserPrincipalSuffix)
-                ? _options.UserPrincipalSuffix.Trim()
-                : (!string.IsNullOrWhiteSpace(_options.Domain) && _options.Domain.Contains('.', StringComparison.Ordinal)
-                    ? _options.Domain.Trim()
+            var upnSuffix = !string.IsNullOrWhiteSpace(options.UserPrincipalSuffix)
+                ? options.UserPrincipalSuffix.Trim()
+                : (!string.IsNullOrWhiteSpace(options.Domain) && options.Domain.Contains('.', StringComparison.Ordinal)
+                    ? options.Domain.Trim()
                     : string.Empty);
 
             if (!string.IsNullOrWhiteSpace(upnSuffix))
@@ -136,75 +191,117 @@ namespace QuizAPI.Services
             return candidates;
         }
 
-        private static UserPrincipal? FindUserPrincipal(PrincipalContext context, string login, string validatedCredential)
+        private static string GetDefaultNamingContext(LdapConnection connection)
+        {
+            var request = new SearchRequest(null, "(objectClass=*)", SearchScope.Base, "defaultNamingContext");
+            var response = (SearchResponse)connection.SendRequest(request);
+            var entry = response.Entries.Count > 0 ? response.Entries[0] : null;
+            var namingContext = entry?.Attributes["defaultNamingContext"]?[0]?.ToString();
+            if (string.IsNullOrWhiteSpace(namingContext))
+            {
+                throw new InvalidOperationException("LDAP defaultNamingContext could not be resolved.");
+            }
+
+            return namingContext;
+        }
+
+        private static SearchResultEntry? FindUserEntry(LdapConnection connection, string searchBase, string login, string credential)
         {
             var localPart = login.Contains('@', StringComparison.Ordinal)
                 ? login[..login.IndexOf('@')]
                 : login;
 
-            return UserPrincipal.FindByIdentity(context, IdentityType.UserPrincipalName, validatedCredential)
-                ?? UserPrincipal.FindByIdentity(context, IdentityType.SamAccountName, localPart);
+            var lookupValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                EscapeLdapFilterValue(login),
+                EscapeLdapFilterValue(localPart),
+                EscapeLdapFilterValue(credential)
+            };
+
+            var filter = "(|" + string.Join(string.Empty, lookupValues.Select(value =>
+                $"(userPrincipalName={value})(mail={value})(sAMAccountName={value})")) + ")";
+
+            var request = new SearchRequest(
+                searchBase,
+                filter,
+                SearchScope.Subtree,
+                "mail",
+                "userPrincipalName",
+                "givenName",
+                "sn",
+                "memberOf");
+
+            var response = (SearchResponse)connection.SendRequest(request);
+            return response.Entries.Count > 0 ? response.Entries[0] : null;
         }
 
-        private static List<string> GetGroupNames(UserPrincipal principal)
+        private static string? GetAttribute(SearchResultEntry entry, string name)
+        {
+            return entry.Attributes.Contains(name) && entry.Attributes[name].Count > 0
+                ? entry.Attributes[name][0]?.ToString()
+                : null;
+        }
+
+        private static List<string> GetGroupNames(SearchResultEntry entry)
         {
             var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            try
+            if (!entry.Attributes.Contains("memberOf"))
             {
-                foreach (var authGroup in principal.GetAuthorizationGroups())
-                {
-                    if (!string.IsNullOrWhiteSpace(authGroup.SamAccountName))
-                    {
-                        groups.Add(authGroup.SamAccountName);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(authGroup.Name))
-                    {
-                        groups.Add(authGroup.Name);
-                    }
-                }
+                return groups.ToList();
             }
-            catch
-            {
-                // Some environments restrict reading authorization groups; fall back to direct groups only.
-                if (principal.GetGroups() is { } directGroups)
-                {
-                    foreach (var group in directGroups)
-                    {
-                        if (!string.IsNullOrWhiteSpace(group.SamAccountName))
-                        {
-                            groups.Add(group.SamAccountName);
-                        }
 
-                        if (!string.IsNullOrWhiteSpace(group.Name))
-                        {
-                            groups.Add(group.Name);
-                        }
-                    }
+            foreach (var raw in entry.Attributes["memberOf"].GetValues(typeof(string)))
+            {
+                var dn = raw?.ToString();
+                if (string.IsNullOrWhiteSpace(dn))
+                {
+                    continue;
+                }
+
+                var cn = ExtractCommonName(dn);
+                if (!string.IsNullOrWhiteSpace(cn))
+                {
+                    groups.Add(cn);
                 }
             }
 
             return groups.OrderBy(x => x).ToList();
         }
 
-        private List<string> MapRoles(IReadOnlyCollection<string> groups)
+        private static string? ExtractCommonName(string distinguishedName)
+        {
+            var parts = distinguishedName.Split(',');
+            var cnPart = parts.FirstOrDefault(part => part.StartsWith("CN=", StringComparison.OrdinalIgnoreCase));
+            return cnPart?.Substring(3);
+        }
+
+        private static string EscapeLdapFilterValue(string value)
+        {
+            return value
+                .Replace("\\", "\\5c", StringComparison.Ordinal)
+                .Replace("*", "\\2a", StringComparison.Ordinal)
+                .Replace("(", "\\28", StringComparison.Ordinal)
+                .Replace(")", "\\29", StringComparison.Ordinal)
+                .Replace("\0", "\\00", StringComparison.Ordinal);
+        }
+
+        private List<string> MapRoles(ActiveDirectoryOptions options, IReadOnlyCollection<string> groups)
         {
             var roles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            if (MatchesAny(groups, _options.AdminGroups))
+            if (MatchesAny(groups, options.AdminGroups))
             {
                 roles.Add("Admin");
             }
 
-            if (MatchesAny(groups, _options.UserGroups))
+            if (MatchesAny(groups, options.UserGroups))
             {
                 roles.Add("User");
             }
 
-            if (roles.Count == 0 && !_options.RequireMappedRole && !string.IsNullOrWhiteSpace(_options.DefaultRole))
+            if (roles.Count == 0 && !options.RequireMappedRole && !string.IsNullOrWhiteSpace(options.DefaultRole))
             {
-                roles.Add(_options.DefaultRole.Trim());
+                roles.Add(options.DefaultRole.Trim());
             }
 
             return roles.OrderBy(x => x).ToList();
@@ -220,5 +317,7 @@ namespace QuizAPI.Services
             return configuredGroups.Any(configured =>
                 groups.Contains(configured, StringComparer.OrdinalIgnoreCase));
         }
+
+        private sealed record LdapEndpoint(string Host, int Port, bool UseSsl);
     }
 }

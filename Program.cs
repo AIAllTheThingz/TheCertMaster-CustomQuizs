@@ -251,6 +251,7 @@ builder.Services.AddScoped<QuizQueryService>();
 builder.Services.AddScoped<QuizImportService>();
 builder.Services.AddScoped<IPreEmploymentConfigStore, FilePreEmploymentConfigStore>();
 builder.Services.Configure<ActiveDirectoryOptions>(builder.Configuration.GetSection("ActiveDirectory"));
+builder.Services.AddScoped<IActiveDirectorySettingsStore, FileActiveDirectorySettingsStore>();
 if (OperatingSystem.IsWindows())
 {
     builder.Services.AddScoped<IActiveDirectoryAuthService, ActiveDirectoryAuthService>();

@@ -51,6 +51,7 @@
     <PackageReference Include="NSwag.AspNetCore" Version="14.6.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.10" />
+    <PackageReference Include="System.DirectoryServices.Protocols" Version="9.0.10" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
   </ItemGroup>
 </Project>
