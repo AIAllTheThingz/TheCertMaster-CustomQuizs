@@ -43,13 +43,39 @@
         }
 
 
-        form, #fileTable, #userManager, #smtpSettings, #quizSection, #questionEditorSection, #quizCreatorSection, #historySection, #preEmploymentSettings, #apiReferenceSection {
+        form, #fileTable, #userManager, #systemStatusSection, #smtpSettings, #quizSection, #questionEditorSection, #quizCreatorSection, #historySection, #preEmploymentSettings, #apiReferenceSection {
             margin-bottom: 1.25rem;
             background: var(--panel);
             padding: 1.25rem;
             border-radius: 18px;
             border: 1px solid var(--line);
             box-shadow: var(--shadow);
+        }
+
+        .statusGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 0.8rem;
+        }
+
+        .statusCard {
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 12px 14px;
+            background: #fbfcfd;
+        }
+
+        .statusCard .label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .statusCard .value {
+            font-weight: 700;
+            word-break: break-word;
         }
 
         input, button, select, textarea {
@@ -227,6 +253,16 @@
         </table>
     </div>
 
+    <div id="systemStatusSection" style="display:none;">
+        <h3>System Status</h3>
+        <div class="muted">Quick environment and deployment details for support and troubleshooting.</div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px;">
+            <button type="button" id="refreshSystemStatusBtn">Refresh Status</button>
+            <span class="muted" id="systemStatusMessage"></span>
+        </div>
+        <div class="statusGrid" id="systemStatusGrid" style="display:none;"></div>
+    </div>
+
     <div id="smtpSettings" style="display:none;">
         <h3>SMTP Settings</h3>
         <div class="muted" style="margin-bottom:8px;">Configure SMTP for authenticated relay (username/password) or unauthenticated relay (leave username blank).</div>
@@ -311,6 +347,7 @@
             <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:center;">
                 <button type="submit">Save LDAP</button>
                 <button type="button" id="ldapReloadBtn">Reload</button>
+                <button type="button" id="ldapTestBtn">Test Connection</button>
                 <span class="muted" id="ldapStatus"></span>
             </div>
         </form>
@@ -370,6 +407,7 @@ const loginForm = document.getElementById("loginForm");
         const fileList = document.getElementById("fileList");
         const userManager = document.getElementById("userManager");   // only once
         const smtpSettings = document.getElementById("smtpSettings");
+        const systemStatusSection = document.getElementById("systemStatusSection");
         const ldapSettings = document.getElementById("ldapSettings");
         const preEmploymentSettings = document.getElementById("preEmploymentSettings");
         let quizSection = null;
@@ -400,6 +438,7 @@ const loginForm = document.getElementById("loginForm");
         const ldapAdminGroups = document.getElementById("ldapAdminGroups");
         const ldapUserGroups = document.getElementById("ldapUserGroups");
         const ldapReloadBtn = document.getElementById("ldapReloadBtn");
+        const ldapTestBtn = document.getElementById("ldapTestBtn");
         const ldapStatus = document.getElementById("ldapStatus");
         const ldapForm = document.getElementById("ldapForm");
         const userList = document.getElementById("userList");
@@ -425,6 +464,9 @@ const loginForm = document.getElementById("loginForm");
         const refreshSubmissionsBtn = document.getElementById("refreshSubmissionsBtn");
         const submissionStatus = document.getElementById("submissionStatus");
         const submissionTbody = document.getElementById("submissionTbody");
+        const refreshSystemStatusBtn = document.getElementById("refreshSystemStatusBtn");
+        const systemStatusMessage = document.getElementById("systemStatusMessage");
+        const systemStatusGrid = document.getElementById("systemStatusGrid");
 
         let token = localStorage.getItem("jwtToken");
         let cachedQuizzes = [];
@@ -479,6 +521,7 @@ const loginForm = document.getElementById("loginForm");
             uploadForm.style.display = "block";
             fileTable.style.display = "block";
             userManager.style.display = "block";
+            systemStatusSection.style.display = "block";
             smtpSettings.style.display = "block";
             ldapSettings.style.display = "block";
             preEmploymentSettings.style.display = "block";
@@ -497,6 +540,7 @@ const loginForm = document.getElementById("loginForm");
             uploadForm.style.display = "none";
             fileTable.style.display = "none";
             userManager.style.display = "none";
+            systemStatusSection.style.display = "none";
             smtpSettings.style.display = "none";
             ldapSettings.style.display = "none";
             preEmploymentSettings.style.display = "none";
@@ -551,6 +595,7 @@ const loginForm = document.getElementById("loginForm");
                 showAdminPanels();
                 loadFiles();
                 loadSmtpSettings();
+                loadSystemStatus();
                 loadLdapSettings();
                 loadUsers();
                 loadQuizCategories();
@@ -781,6 +826,64 @@ const loginForm = document.getElementById("loginForm");
             }
         }
 
+        function renderSystemStatus(data) {
+            if (!systemStatusGrid) return;
+            const entries = [
+                ["Machine", data.machineName],
+                ["Environment", data.environmentName],
+                ["Application", data.applicationName],
+                ["Version", data.informationalVersion || data.version],
+                ["Database", data.databaseName || "(not detected)"],
+                ["Swagger", data.swaggerEnabled ? "Enabled" : "Disabled"],
+                ["LDAP", data.ldapEnabled ? `Enabled${data.ldapHost ? " (" + data.ldapHost + ")" : ""}` : "Disabled"],
+                ["Health", data.healthUrl],
+                ["Ready Health", data.readyHealthUrl],
+                ["Swagger URL", data.swaggerUrl],
+                ["Content Root", data.contentRootPath],
+                ["Web Root", data.webRootPath]
+            ];
+
+            systemStatusGrid.innerHTML = entries.map(([label, value]) => `
+                <div class="statusCard">
+                    <span class="label">${escapeHtml(label)}</span>
+                    <div class="value">${escapeHtml(value ?? "")}</div>
+                </div>
+            `).join("");
+            systemStatusGrid.style.display = "grid";
+        }
+
+        async function loadSystemStatus() {
+            if (!token) return;
+            try {
+                systemStatusMessage.textContent = "Loading...";
+                if (systemStatusGrid) {
+                    systemStatusGrid.style.display = "none";
+                    systemStatusGrid.innerHTML = "";
+                }
+
+                const res = await fetch("/api/admin/system-status", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    handleUnauthorizedAdminSession("Your admin session expired while loading system status. Please log in again.");
+                    return;
+                }
+
+                if (!res.ok) {
+                    const text = await res.text().catch(() => "");
+                    systemStatusMessage.textContent = "Failed to load system status: " + (text || res.status);
+                    return;
+                }
+
+                const data = await ApiJson.readJsonNormalized(res);
+                renderSystemStatus(data);
+                systemStatusMessage.textContent = "Loaded.";
+            } catch (err) {
+                systemStatusMessage.textContent = "Error loading system status: " + err.message;
+            }
+        }
+
         async function saveSmtpSettings() {
             if (!token) return;
             try {
@@ -886,6 +989,41 @@ const loginForm = document.getElementById("loginForm");
             }
         }
 
+        async function testLdapConnection() {
+            if (!token) return;
+            try {
+                ldapStatus.textContent = 'Testing connection...';
+                const res = await fetch('/api/admin/active-directory/test', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (res.status === 401) {
+                    handleUnauthorizedAdminSession("Your admin session expired while testing LDAP settings. Please log in again.");
+                    return;
+                }
+                if (!res.ok) {
+                    const t = await res.text();
+                    ldapStatus.textContent = 'Test failed: ' + t;
+                    return;
+                }
+
+                const result = await ApiJson.readJsonNormalized(res);
+                const lines = Array.isArray(result.results)
+                    ? result.results.map(r => {
+                        const label = r.useSsl ? `LDAPS ${r.port}` : `LDAP ${r.port}`;
+                        return `${label}: ${r.reachable ? 'OK' : 'Failed'}${r.message ? ' - ' + r.message : ''}`;
+                    })
+                    : ['No endpoint results returned.'];
+
+                ldapStatus.textContent = lines.join(' | ');
+            } catch (err) {
+                console.error(err);
+                ldapStatus.textContent = 'Error testing LDAP (see console).';
+            }
+        }
+
         async function testSmtp() {
             if (!token) return;
             const to = (smtpTestTo.value || '').trim();
@@ -923,6 +1061,7 @@ const loginForm = document.getElementById("loginForm");
         }
         if (smtpReloadBtn) smtpReloadBtn.addEventListener('click', loadSmtpSettings);
         if (smtpTestBtn) smtpTestBtn.addEventListener('click', testSmtp);
+        if (refreshSystemStatusBtn) refreshSystemStatusBtn.addEventListener('click', loadSystemStatus);
         if (ldapForm) {
             ldapForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -930,6 +1069,7 @@ const loginForm = document.getElementById("loginForm");
             });
         }
         if (ldapReloadBtn) ldapReloadBtn.addEventListener('click', loadLdapSettings);
+        if (ldapTestBtn) ldapTestBtn.addEventListener('click', testLdapConnection);
         if (preEmploymentReloadBtn) preEmploymentReloadBtn.addEventListener('click', loadPreEmploymentConfig);
         if (preEmploymentForm) {
             preEmploymentForm.addEventListener("submit", async (e) => {
@@ -2298,6 +2438,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         loadFiles();
         loadUsers();
+        loadSystemStatus();
         loadSmtpSettings();
         loadLdapSettings();
         loadQuizCategories();

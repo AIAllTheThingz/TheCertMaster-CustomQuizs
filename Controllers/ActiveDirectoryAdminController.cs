@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuizAPI.Services;
+using System.DirectoryServices.Protocols;
 
 namespace QuizAPI.Controllers
 {
@@ -65,6 +66,33 @@ namespace QuizAPI.Controllers
             return Ok(new { message = "LDAP settings saved." });
         }
 
+        [HttpPost("test")]
+        public async Task<IActionResult> TestConnection()
+        {
+            var settings = await _store.GetAsync();
+            if (string.IsNullOrWhiteSpace(settings.Host))
+            {
+                return BadRequest("LDAP host is not configured.");
+            }
+
+            var results = new List<object>();
+            if (settings.Port > 0)
+            {
+                results.Add(TestEndpoint(settings.Host, settings.Port, useSsl: false));
+            }
+
+            if (settings.SslPort > 0)
+            {
+                results.Add(TestEndpoint(settings.Host, settings.SslPort, useSsl: true));
+            }
+
+            return Ok(new
+            {
+                host = settings.Host,
+                results
+            });
+        }
+
         private static List<string> SplitGroups(string value)
         {
             return (value ?? string.Empty)
@@ -73,6 +101,50 @@ namespace QuizAPI.Controllers
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private static object TestEndpoint(string host, int port, bool useSsl)
+        {
+            try
+            {
+                var identifier = new LdapDirectoryIdentifier(host, port);
+                using var connection = new LdapConnection(identifier)
+                {
+                    AuthType = AuthType.Anonymous,
+                    Timeout = TimeSpan.FromSeconds(8)
+                };
+
+                connection.SessionOptions.ProtocolVersion = 3;
+                connection.SessionOptions.ReferralChasing = ReferralChasingOptions.None;
+                connection.SessionOptions.SecureSocketLayer = useSsl;
+                connection.Bind();
+
+                var request = new SearchRequest(null, "(objectClass=*)", SearchScope.Base, "defaultNamingContext");
+                var response = (SearchResponse)connection.SendRequest(request);
+                var namingContext = response.Entries.Count > 0
+                    ? response.Entries[0].Attributes["defaultNamingContext"]?[0]?.ToString()
+                    : string.Empty;
+
+                return new
+                {
+                    port,
+                    useSsl,
+                    reachable = true,
+                    message = string.IsNullOrWhiteSpace(namingContext)
+                        ? "Connected. LDAP root query succeeded."
+                        : $"Connected. defaultNamingContext={namingContext}"
+                };
+            }
+            catch (Exception ex)
+            {
+                return new
+                {
+                    port,
+                    useSsl,
+                    reachable = false,
+                    message = ex.Message
+                };
+            }
         }
     }
 }
