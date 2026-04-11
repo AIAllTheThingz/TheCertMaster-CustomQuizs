@@ -78,6 +78,69 @@
             font-weight: 700;
             word-break: break-word;
         }
+        .statusCard.good {
+            background: #f3fbf6;
+            border-color: #b7e2c5;
+        }
+        .statusCard.warn {
+            background: #fff9ec;
+            border-color: #f0d694;
+        }
+        .statusCard.bad {
+            background: #fff4f4;
+            border-color: #efc0c0;
+        }
+        .statusBanner {
+            margin-top: 0.5rem;
+            padding: 0.72rem 0.9rem;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #f8fbfd;
+            color: var(--ink);
+            white-space: pre-wrap;
+        }
+        .statusBanner.ok {
+            background: #eef9f2;
+            border-color: #b7e2c5;
+            color: #166534;
+        }
+        .statusBanner.warn {
+            background: #fff9ec;
+            border-color: #f0d694;
+            color: #92400e;
+        }
+        .statusBanner.error {
+            background: #fff4f4;
+            border-color: #efc0c0;
+            color: #991b1b;
+        }
+        .resultPills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .resultPill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: #f8fbfd;
+            font-size: 0.92rem;
+            color: var(--ink);
+        }
+        .resultPill.ok {
+            background: #eef9f2;
+            border-color: #b7e2c5;
+            color: #166534;
+        }
+        .resultPill.error {
+            background: #fff4f4;
+            border-color: #efc0c0;
+            color: #991b1b;
+        }
 
         input, button, select, textarea {
             font-size: 1rem;
@@ -225,7 +288,7 @@
         </table>
     </div>
 
-    <div id="status"></div>
+    <div id="status" class="statusBanner"></div>
 
     <!-- OK Keep this div OUTSIDE #status -->
     <div id="userManager" style="display:none;">
@@ -259,7 +322,7 @@
         <div class="muted">Quick environment and deployment details for support and troubleshooting.</div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px;">
             <button type="button" id="refreshSystemStatusBtn">Refresh Status</button>
-            <span class="muted" id="systemStatusMessage"></span>
+            <div id="systemStatusMessage" class="statusBanner" style="display:none;"></div>
         </div>
         <div class="statusGrid" id="systemStatusGrid" style="display:none;"></div>
     </div>
@@ -309,7 +372,7 @@
                 <button type="button" id="smtpReloadBtn">Reload</button>
                 <input type="email" id="smtpTestTo" placeholder="Test email recipient" style="min-width:260px;" />
                 <button type="button" id="smtpTestBtn">Send Test</button>
-                <span class="muted" id="smtpStatus"></span>
+                <div id="smtpStatus" class="statusBanner" style="display:none;"></div>
             </div>
         </form>
     </div>
@@ -349,7 +412,10 @@
                 <button type="submit">Save LDAP</button>
                 <button type="button" id="ldapReloadBtn">Reload</button>
                 <button type="button" id="ldapTestBtn">Test Connection</button>
-                <span class="muted" id="ldapStatus"></span>
+                <div style="flex:1 1 100%;">
+                    <div id="ldapStatus" class="statusBanner" style="display:none;"></div>
+                    <div id="ldapResultPills" class="resultPills" style="display:none;"></div>
+                </div>
             </div>
         </form>
     </div>
@@ -392,7 +458,7 @@
                 <button type="submit">Save Pre-Employment Setup</button>
                 <button type="button" id="preEmploymentReloadBtn">Reload</button>
                 <a class="app-link" href="/preemployment.html" target="_blank">Open Pre-Employment Page</a>
-                <span class="muted" id="preEmploymentStatus"></span>
+                <div id="preEmploymentStatus" class="statusBanner" style="display:none;"></div>
             </div>
         </form>
     </div>
@@ -441,6 +507,7 @@ const loginForm = document.getElementById("loginForm");
         const ldapReloadBtn = document.getElementById("ldapReloadBtn");
         const ldapTestBtn = document.getElementById("ldapTestBtn");
         const ldapStatus = document.getElementById("ldapStatus");
+        const ldapResultPills = document.getElementById("ldapResultPills");
         const ldapForm = document.getElementById("ldapForm");
         const userList = document.getElementById("userList");
         const userSearch = document.getElementById("userSearch");
@@ -468,6 +535,66 @@ const loginForm = document.getElementById("loginForm");
         const refreshSystemStatusBtn = document.getElementById("refreshSystemStatusBtn");
         const systemStatusMessage = document.getElementById("systemStatusMessage");
         const systemStatusGrid = document.getElementById("systemStatusGrid");
+
+        function setBannerStatus(el, tone, message) {
+            if (!el) return;
+            if (!message) {
+                el.textContent = "";
+                el.style.display = "none";
+                el.className = "statusBanner";
+                return;
+            }
+
+            el.textContent = message;
+            el.style.display = "block";
+            el.className = "statusBanner " + (tone || "warn");
+        }
+
+        function setMainStatus(tone, message) {
+            setBannerStatus(statusBox, tone, message);
+        }
+
+        function setSectionStatus(el, tone, message) {
+            setBannerStatus(el, tone, message);
+        }
+
+        async function readResponseMessage(res) {
+            if (!res) return "";
+
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                try {
+                    const data = await ApiJson.readJsonNormalized(res);
+                    return data.detail || data.title || data.message || JSON.stringify(data);
+                } catch {
+                    return "";
+                }
+            }
+
+            return await res.text().catch(() => "");
+        }
+
+        function clearLdapResultPills() {
+            if (!ldapResultPills) return;
+            ldapResultPills.innerHTML = "";
+            ldapResultPills.style.display = "none";
+        }
+
+        function showLdapResultPills(results) {
+            if (!ldapResultPills) return;
+            const items = Array.isArray(results) ? results : [];
+            if (!items.length) {
+                clearLdapResultPills();
+                return;
+            }
+
+            ldapResultPills.innerHTML = items.map(r => {
+                const label = r.useSsl ? `LDAPS ${r.port}` : `LDAP ${r.port}`;
+                const tone = r.reachable ? "ok" : "error";
+                return `<span class="resultPill ${tone}">${escapeHtml(label)}: ${escapeHtml(r.reachable ? "OK" : "Failed")}</span>`;
+            }).join("");
+            ldapResultPills.style.display = "flex";
+        }
 
         let token = localStorage.getItem("jwtToken");
         let cachedQuizzes = [];
@@ -559,13 +686,13 @@ const loginForm = document.getElementById("loginForm");
             token = null;
             hideAdminPanels();
             userList.innerHTML = "";
-            statusBox.textContent = message || "Your admin session expired. Please log in again.";
+            setMainStatus("warn", message || "Your admin session expired. Please log in again.");
         }
 
 
         // Rehydrate session
         if (token) {
-            statusBox.textContent = "Resuming admin session...";
+            setMainStatus("warn", "Resuming admin session...");
         }
 
         // Login
@@ -573,7 +700,7 @@ const loginForm = document.getElementById("loginForm");
             e.preventDefault();
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
-            statusBox.textContent = "Logging in...";
+            setMainStatus("warn", "Logging in...");
 
             try {
                 const res = await fetch("/api/auth/login", {
@@ -583,8 +710,8 @@ const loginForm = document.getElementById("loginForm");
                 });
 
                 if (!res.ok) {
-                    const errorText = await res.text();
-                    statusBox.textContent = "Login failed (" + res.status + "): " + (errorText || "Check credentials.");
+                    const errorText = await readResponseMessage(res);
+                    setMainStatus("error", "Login failed (" + res.status + "): " + (errorText || "Check credentials."));
                     return;
                 }
 
@@ -592,7 +719,7 @@ const loginForm = document.getElementById("loginForm");
                 token = data.token;
                 localStorage.setItem("jwtToken", token);
 
-                statusBox.textContent = "Login successful.";
+                setMainStatus("ok", "Login successful.");
                 showAdminPanels();
                 loadFiles();
                 loadSmtpSettings();
@@ -609,7 +736,7 @@ const loginForm = document.getElementById("loginForm");
                 loadQuizCreatorPage(quizCreatorState.page);
                 renderQuizCreatorSelectedList();
             } catch (err) {
-                statusBox.textContent = "Error: " + err.message;
+                setMainStatus("error", "Error: " + err.message);
             }
         });
 
@@ -619,7 +746,7 @@ const loginForm = document.getElementById("loginForm");
             const file = document.getElementById("fileInput").files[0];
             if (!file) return alert("Select a file first!");
 
-            statusBox.textContent = "Uploading " + file.name + "...";
+            setMainStatus("warn", "Uploading " + file.name + "...");
 
             const formData = new FormData();
             formData.append("File", file);
@@ -633,28 +760,29 @@ const loginForm = document.getElementById("loginForm");
                     body: formData
                 });
 
-                const text = await res.text();
+                const text = await readResponseMessage(res);
                 if (res.ok) {
                     if (isZip) {
                         try {
                             const data = JSON.parse(text);
-                            statusBox.textContent =
-                                "OK Package upload successful.\n" +
+                            setMainStatus("ok",
+                                "Package upload successful.\n" +
                                 "Zip: " + (data.ZipFileName || file.name) + "\n" +
                                 "CSV ready to import: " + (data.CsvFileName || "(not returned)") + "\n" +
-                                "Images saved: " + (data.ImagesSaved ?? 0);
+                                "Images saved: " + (data.ImagesSaved ?? 0) + "\n" +
+                                "Next step: click Import on the extracted CSV row below.");
                         } catch {
-                            statusBox.textContent = "OK Package upload successful:\n" + text;
+                            setMainStatus("ok", "Package upload successful.\n" + text);
                         }
                     } else {
-                        statusBox.textContent = "OK Upload successful:\n" + text;
+                        setMainStatus("ok", "Upload successful.\n" + text);
                     }
                     loadFiles();
                 } else {
-                    statusBox.textContent = "ERROR Upload failed (" + res.status + "): " + text;
+                    setMainStatus("error", "Upload failed (" + res.status + "): " + text);
                 }
             } catch (err) {
-                statusBox.textContent = "Error: " + err.message;
+                setMainStatus("error", "Error: " + err.message);
             }
         });
 
@@ -697,37 +825,37 @@ const loginForm = document.getElementById("loginForm");
         // Import to DB
         async function processFile(name) {
             if (isZipFileName(name)) {
-                statusBox.textContent = "ZIP packages must be uploaded through the package uploader and then imported using the extracted CSV file.";
+                setMainStatus("warn", "ZIP packages must be uploaded through the package uploader and then imported using the extracted CSV file.");
                 return;
             }
             if (!confirm(`Import ${name} into database?`)) return;
-            statusBox.textContent = `Importing ${name}...`;
+            setMainStatus("warn", `Importing ${name}...`);
             const res = await fetch(`/api/import/process/${encodeURIComponent(name)}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` }
             });
-            const text = await res.text();
+            const text = await readResponseMessage(res);
             if (res.ok) {
-                statusBox.textContent = "OK Imported successfully:\n" + text;
+                setMainStatus("ok", "Imported successfully.\n" + text);
             } else {
-                statusBox.textContent = "ERROR Import failed (" + res.status + "): " + text;
+                setMainStatus("error", "Import failed (" + res.status + "): " + text);
             }
         }
 
         // Delete
         async function deleteFile(name) {
             if (!confirm(`Delete ${name}?`)) return;
-            statusBox.textContent = `Deleting ${name}...`;
+            setMainStatus("warn", `Deleting ${name}...`);
             const res = await fetch(`/api/files/${encodeURIComponent(name)}`, {
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${token}` }
             });
-            const text = await res.text();
+            const text = await readResponseMessage(res);
             if (res.ok) {
-                statusBox.textContent = "🗑 Deleted: " + text;
+                setMainStatus("ok", "Deleted: " + text);
                 loadFiles();
             } else {
-                statusBox.textContent = "ERROR Delete failed (" + res.status + "): " + text;
+                setMainStatus("error", "Delete failed (" + res.status + "): " + text);
             }
         }
 
@@ -801,13 +929,13 @@ const loginForm = document.getElementById("loginForm");
         async function loadSmtpSettings() {
             if (!token) return;
             try {
-                smtpStatus.textContent = 'Loading...';
+                setSectionStatus(smtpStatus, 'warn', 'Loading...');
                 const res = await fetch('/api/admin/smtp', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!res.ok) {
-                    const t = await res.text();
-                    smtpStatus.textContent = 'Failed to load SMTP: ' + t;
+                    const t = await readResponseMessage(res);
+                    setSectionStatus(smtpStatus, 'error', 'Failed to load SMTP: ' + t);
                     return;
                 }
                 const s = await ApiJson.readJsonNormalized(res);
@@ -820,34 +948,34 @@ const loginForm = document.getElementById("loginForm");
                 smtpPassword.value = ''; // never fill password field
                 smtpUseStartTls.checked = !!s.useStartTls;
                 smtpUseSsl.checked = !!s.useSsl;
-                smtpStatus.textContent = s.passwordSet ? 'Loaded. Password is set.' : 'Loaded. Password is not set.';
+                setSectionStatus(smtpStatus, 'ok', s.passwordSet ? 'Loaded. Password is set.' : 'Loaded. Password is not set.');
             } catch (err) {
                 console.error(err);
-                smtpStatus.textContent = 'Error loading SMTP (see console).';
+                setSectionStatus(smtpStatus, 'error', 'Error loading SMTP (see console).');
             }
         }
 
         function renderSystemStatus(data) {
             if (!systemStatusGrid) return;
             const entries = [
-                ["Machine", data.machineName],
-                ["Environment", data.environmentName],
-                ["Application", data.applicationName],
-                ["Version", data.informationalVersion || data.version],
-                ["Database", data.databaseName || "(not detected)"],
-                ["Swagger", data.swaggerEnabled ? "Enabled" : "Disabled"],
-                ["LDAP", data.ldapEnabled ? `Enabled${data.ldapHost ? " (" + data.ldapHost + ")" : ""}` : "Disabled"],
-                ["Health", data.healthUrl],
-                ["Ready Health", data.readyHealthUrl],
-                ["Swagger URL", data.swaggerUrl],
-                ["Content Root", data.contentRootPath],
-                ["Web Root", data.webRootPath]
+                { label: "Machine", value: data.machineName, tone: "good" },
+                { label: "Environment", value: data.environmentName, tone: "good" },
+                { label: "Application", value: data.applicationName, tone: "" },
+                { label: "Version", value: data.informationalVersion || data.version, tone: "" },
+                { label: "Database", value: data.databaseName || "(not detected)", tone: data.databaseName ? "good" : "warn" },
+                { label: "Swagger", value: data.swaggerEnabled ? "Enabled" : "Disabled", tone: data.swaggerEnabled ? "warn" : "good" },
+                { label: "LDAP", value: data.ldapEnabled ? `Enabled${data.ldapHost ? " (" + data.ldapHost + ")" : ""}` : "Disabled", tone: data.ldapEnabled ? "warn" : "good" },
+                { label: "Health", value: data.healthUrl, tone: "good" },
+                { label: "Ready Health", value: data.readyHealthUrl, tone: "good" },
+                { label: "Swagger URL", value: data.swaggerUrl, tone: data.swaggerEnabled ? "warn" : "" },
+                { label: "Content Root", value: data.contentRootPath, tone: "" },
+                { label: "Web Root", value: data.webRootPath, tone: "" }
             ];
 
-            systemStatusGrid.innerHTML = entries.map(([label, value]) => `
-                <div class="statusCard">
-                    <span class="label">${escapeHtml(label)}</span>
-                    <div class="value">${escapeHtml(value ?? "")}</div>
+            systemStatusGrid.innerHTML = entries.map(entry => `
+                <div class="statusCard ${entry.tone}">
+                    <span class="label">${escapeHtml(entry.label)}</span>
+                    <div class="value">${escapeHtml(entry.value ?? "")}</div>
                 </div>
             `).join("");
             systemStatusGrid.style.display = "grid";
@@ -856,7 +984,7 @@ const loginForm = document.getElementById("loginForm");
         async function loadSystemStatus() {
             if (!token) return;
             try {
-                systemStatusMessage.textContent = "Loading...";
+                setSectionStatus(systemStatusMessage, "warn", "Loading...");
                 if (systemStatusGrid) {
                     systemStatusGrid.style.display = "none";
                     systemStatusGrid.innerHTML = "";
@@ -872,23 +1000,23 @@ const loginForm = document.getElementById("loginForm");
                 }
 
                 if (!res.ok) {
-                    const text = await res.text().catch(() => "");
-                    systemStatusMessage.textContent = "Failed to load system status: " + (text || res.status);
+                    const text = await readResponseMessage(res);
+                    setSectionStatus(systemStatusMessage, "error", "Failed to load system status: " + (text || res.status));
                     return;
                 }
 
                 const data = await ApiJson.readJsonNormalized(res);
                 renderSystemStatus(data);
-                systemStatusMessage.textContent = "Loaded.";
+                setSectionStatus(systemStatusMessage, "ok", "Loaded.");
             } catch (err) {
-                systemStatusMessage.textContent = "Error loading system status: " + err.message;
+                setSectionStatus(systemStatusMessage, "error", "Error loading system status: " + err.message);
             }
         }
 
         async function saveSmtpSettings() {
             if (!token) return;
             try {
-                smtpStatus.textContent = 'Saving...';
+                setSectionStatus(smtpStatus, 'warn', 'Saving...');
                 const payload = {
                     host: smtpHost.value.trim(),
                     port: parseInt(smtpPort.value || '25', 10),
@@ -910,23 +1038,24 @@ const loginForm = document.getElementById("loginForm");
                     body: JSON.stringify(payload)
                 });
                 if (!res.ok) {
-                    const t = await res.text();
-                    smtpStatus.textContent = 'Save failed: ' + t;
+                    const t = await readResponseMessage(res);
+                    setSectionStatus(smtpStatus, 'error', 'Save failed: ' + t);
                     return;
                 }
                 smtpPassword.value = '';
-                smtpStatus.textContent = 'Saved.';
+                setSectionStatus(smtpStatus, 'ok', 'Saved.');
                 await loadSmtpSettings();
             } catch (err) {
                 console.error(err);
-                smtpStatus.textContent = 'Error saving SMTP (see console).';
+                setSectionStatus(smtpStatus, 'error', 'Error saving SMTP (see console).');
             }
         }
 
         async function loadLdapSettings() {
             if (!token) return;
             try {
-                ldapStatus.textContent = 'Loading...';
+                clearLdapResultPills();
+                setSectionStatus(ldapStatus, 'warn', 'Loading...');
                 const res = await fetch('/api/admin/active-directory', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -935,8 +1064,8 @@ const loginForm = document.getElementById("loginForm");
                     return;
                 }
                 if (!res.ok) {
-                    const t = await res.text();
-                    ldapStatus.textContent = 'Failed to load LDAP: ' + t;
+                    const t = await readResponseMessage(res);
+                    setSectionStatus(ldapStatus, 'error', 'Failed to load LDAP: ' + t);
                     return;
                 }
                 const s = await ApiJson.readJsonNormalized(res);
@@ -946,17 +1075,20 @@ const loginForm = document.getElementById("loginForm");
                 ldapSslPort.value = s.sslPort ?? 636;
                 ldapAdminGroups.value = Array.isArray(s.adminGroups) ? s.adminGroups.join(', ') : '';
                 ldapUserGroups.value = Array.isArray(s.userGroups) ? s.userGroups.join(', ') : '';
-                ldapStatus.textContent = 'Loaded.';
+                clearLdapResultPills();
+                setSectionStatus(ldapStatus, 'ok', 'Loaded.');
             } catch (err) {
                 console.error(err);
-                ldapStatus.textContent = 'Error loading LDAP (see console).';
+                clearLdapResultPills();
+                setSectionStatus(ldapStatus, 'error', 'Error loading LDAP (see console).');
             }
         }
 
         async function saveLdapSettings() {
             if (!token) return;
             try {
-                ldapStatus.textContent = 'Saving...';
+                clearLdapResultPills();
+                setSectionStatus(ldapStatus, 'warn', 'Saving...');
                 const payload = {
                     enabled: !!ldapEnabled.checked,
                     host: ldapHost.value.trim(),
@@ -978,22 +1110,23 @@ const loginForm = document.getElementById("loginForm");
                     return;
                 }
                 if (!res.ok) {
-                    const t = await res.text();
-                    ldapStatus.textContent = 'Save failed: ' + t;
+                    const t = await readResponseMessage(res);
+                    setSectionStatus(ldapStatus, 'error', 'Save failed: ' + t);
                     return;
                 }
-                ldapStatus.textContent = 'Saved.';
+                setSectionStatus(ldapStatus, 'ok', 'Saved.');
                 await loadLdapSettings();
             } catch (err) {
                 console.error(err);
-                ldapStatus.textContent = 'Error saving LDAP (see console).';
+                setSectionStatus(ldapStatus, 'error', 'Error saving LDAP (see console).');
             }
         }
 
         async function testLdapConnection() {
             if (!token) return;
             try {
-                ldapStatus.textContent = 'Testing connection...';
+                clearLdapResultPills();
+                setSectionStatus(ldapStatus, 'warn', 'Testing connection...');
                 const res = await fetch('/api/admin/active-directory/test', {
                     method: 'POST',
                     headers: {
@@ -1005,23 +1138,25 @@ const loginForm = document.getElementById("loginForm");
                     return;
                 }
                 if (!res.ok) {
-                    const t = await res.text();
-                    ldapStatus.textContent = 'Test failed: ' + t;
+                    const t = await readResponseMessage(res);
+                    setSectionStatus(ldapStatus, 'error', 'Test failed: ' + t);
                     return;
                 }
 
                 const result = await ApiJson.readJsonNormalized(res);
-                const lines = Array.isArray(result.results)
-                    ? result.results.map(r => {
-                        const label = r.useSsl ? `LDAPS ${r.port}` : `LDAP ${r.port}`;
-                        return `${label}: ${r.reachable ? 'OK' : 'Failed'}${r.message ? ' - ' + r.message : ''}`;
-                    })
-                    : ['No endpoint results returned.'];
-
-                ldapStatus.textContent = lines.join(' | ');
+                const results = Array.isArray(result.results) ? result.results : [];
+                showLdapResultPills(results);
+                const messages = results.map(r => {
+                    const label = r.useSsl ? `LDAPS ${r.port}` : `LDAP ${r.port}`;
+                    return `${label}: ${r.message || (r.reachable ? 'Connected.' : 'Failed.')}`;
+                });
+                const allGood = results.length > 0 && results.every(r => !!r.reachable);
+                const tone = allGood ? 'ok' : (results.some(r => !!r.reachable) ? 'warn' : 'error');
+                setSectionStatus(ldapStatus, tone, messages.join('\n') || 'No endpoint results returned.');
             } catch (err) {
                 console.error(err);
-                ldapStatus.textContent = 'Error testing LDAP (see console).';
+                clearLdapResultPills();
+                setSectionStatus(ldapStatus, 'error', 'Error testing LDAP (see console).');
             }
         }
 
@@ -1029,11 +1164,11 @@ const loginForm = document.getElementById("loginForm");
             if (!token) return;
             const to = (smtpTestTo.value || '').trim();
             if (!to) {
-                smtpStatus.textContent = 'Enter a test recipient email.';
+                setSectionStatus(smtpStatus, 'warn', 'Enter a test recipient email.');
                 return;
             }
             try {
-                smtpStatus.textContent = 'Sending test...';
+                setSectionStatus(smtpStatus, 'warn', 'Sending test...');
                 const res = await fetch('/api/admin/smtp/test', {
                     method: 'POST',
                     headers: {
@@ -1043,14 +1178,14 @@ const loginForm = document.getElementById("loginForm");
                     body: JSON.stringify({ toEmail: to })
                 });
                 if (!res.ok) {
-                    const t = await res.text();
-                    smtpStatus.textContent = 'Test failed: ' + t;
+                    const t = await readResponseMessage(res);
+                    setSectionStatus(smtpStatus, 'error', 'Test failed: ' + t);
                     return;
                 }
-                smtpStatus.textContent = 'Test email sent.';
+                setSectionStatus(smtpStatus, 'ok', 'Test email sent.');
             } catch (err) {
                 console.error(err);
-                smtpStatus.textContent = 'Error sending test (see console).';
+                setSectionStatus(smtpStatus, 'error', 'Error sending test (see console).');
             }
         }
         // SMTP form wiring
@@ -1097,12 +1232,12 @@ const loginForm = document.getElementById("loginForm");
 
         
 
-            const text = await res.text();
+            const text = await readResponseMessage(res);
             if (res.ok) {
-                statusBox.textContent = "OK " + text;
+                setMainStatus("ok", text);
                 loadUsers();
             } else {
-                statusBox.textContent = "ERROR " + text;
+                setMainStatus("error", text);
             }
         });
 
@@ -1120,12 +1255,12 @@ const loginForm = document.getElementById("loginForm");
                 body: JSON.stringify({ firstName, lastName, role })
             });
 
-            const text = await res.text();
+            const text = await readResponseMessage(res);
             if (res.ok) {
-                statusBox.textContent = "OK " + text;
+                setMainStatus("ok", text);
                 loadUsers();
             } else {
-                statusBox.textContent = "ERROR " + text;
+                setMainStatus("error", text);
             }
         }
 
@@ -1138,9 +1273,9 @@ const loginForm = document.getElementById("loginForm");
                 },
                 body: JSON.stringify({ role })
             });
-            const text = await res.text();
-            if (res.ok) { statusBox.textContent = "OK " + text; loadUsers(); }
-            else { statusBox.textContent = "ERROR " + text; }
+            const text = await readResponseMessage(res);
+            if (res.ok) { setMainStatus("ok", text); loadUsers(); }
+            else { setMainStatus("error", text); }
         }
 
         async function resetPasswordPrompt(email) {
@@ -1156,11 +1291,11 @@ const loginForm = document.getElementById("loginForm");
                 body: JSON.stringify({ newPassword })
             });
 
-            const text = await res.text();
+            const text = await readResponseMessage(res);
             if (res.ok) {
-                statusBox.textContent = "OK " + text;
+                setMainStatus("ok", text);
             } else {
-                statusBox.textContent = "ERROR " + text;
+                setMainStatus("error", text);
             }
         }
 
@@ -1170,9 +1305,9 @@ const loginForm = document.getElementById("loginForm");
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${token}` }
             });
-            const text = await res.text();
-            if (res.ok) { statusBox.textContent = "🗑 " + text; loadUsers(); }
-            else { statusBox.textContent = "ERROR " + text; }
+            const text = await readResponseMessage(res);
+            if (res.ok) { setMainStatus("ok", text); loadUsers(); }
+            else { setMainStatus("error", text); }
         }
 
         if (userSearch) {
@@ -1186,7 +1321,7 @@ const loginForm = document.getElementById("loginForm");
             token = null;
             hideAdminPanels();
             userList.innerHTML = "";
-            statusBox.textContent = "Logged out.";
+            setMainStatus("warn", "Logged out.");
         });
     
 
@@ -1285,11 +1420,11 @@ async function loadQuizzes() {
     if (!quizStatus || !quizTbody) return;
 
     if (!token) {
-        quizStatus.textContent = "Login required.";
+        setSectionStatus(quizStatus, "warn", "Login required.");
         return;
     }
 
-    quizStatus.textContent = "Loading quizzes...";
+    setSectionStatus(quizStatus, "warn", "Loading quizzes...");
     quizTbody.innerHTML = "";
 
     try {
@@ -1304,7 +1439,7 @@ async function loadQuizzes() {
         });
 
         if (!res.ok) {
-            quizStatus.textContent = "Failed to load quizzes: " + res.status;
+            setSectionStatus(quizStatus, "error", "Failed to load quizzes: " + res.status);
             return;
         }
 
@@ -1315,11 +1450,11 @@ async function loadQuizzes() {
         populateQuizCreatorQuizOptions(cachedQuizzes);
 
         if (!Array.isArray(quizzes) || quizzes.length === 0) {
-            quizStatus.textContent = "No quizzes found in database.";
+            setSectionStatus(quizStatus, "warn", "No quizzes found in database.");
             return;
         }
 
-        quizStatus.textContent = "Loaded " + quizzes.length + " quiz(es).";
+        setSectionStatus(quizStatus, "ok", "Loaded " + quizzes.length + " quiz(es).");
 
         for (const q of quizzes) {
             const id = q.Id || q.id || "";
@@ -1345,7 +1480,7 @@ async function loadQuizzes() {
             quizTbody.appendChild(tr);
         }
     } catch (err) {
-        quizStatus.textContent = "Error loading quizzes: " + err.message;
+        setSectionStatus(quizStatus, "error", "Error loading quizzes: " + err.message);
         cachedQuizzes = [];
         populatePreEmploymentQuizOptions([]);
         populateQuestionEditorQuizOptions([]);
@@ -1359,7 +1494,7 @@ async function downloadAuthorizedFile(url, fileName) {
     });
 
     if (!res.ok) {
-        const text = await res.text().catch(() => "");
+        const text = await readResponseMessage(res);
         throw new Error(text || ("Request failed: " + res.status));
     }
 
@@ -1494,12 +1629,12 @@ function renderQuizCreatorQuestionTable(pageData) {
     quizCreatorState.page = Number(pageData.page ?? 1);
 
     if (!items.length) {
-        quizCreatorStatus.textContent = "No source questions found for this quiz.";
+        setSectionStatus(quizCreatorStatus, "warn", "No source questions found for this quiz.");
         quizCreatorPager.style.display = "none";
         return;
     }
 
-    quizCreatorStatus.textContent = `Loaded ${items.length} source question(s) on page ${quizCreatorState.page} of ${quizCreatorState.totalPages || 1}.`;
+    setSectionStatus(quizCreatorStatus, "ok", `Loaded ${items.length} source question(s) on page ${quizCreatorState.page} of ${quizCreatorState.totalPages || 1}.`);
     quizCreatorPager.style.display = "flex";
     quizCreatorPageInfo.textContent = `Page ${quizCreatorState.page} of ${quizCreatorState.totalPages || 1}`;
     quizCreatorPrevBtn.disabled = quizCreatorState.page <= 1;
@@ -1534,18 +1669,18 @@ async function loadQuizCreatorPage(page = 1) {
     quizCreatorState.page = page;
 
     if (!token) {
-        quizCreatorStatus.textContent = "Login required.";
+        setSectionStatus(quizCreatorStatus, "warn", "Login required.");
         return;
     }
 
     if (!quizCreatorState.quizId) {
         quizCreatorTbody.innerHTML = "";
         quizCreatorPager.style.display = "none";
-        quizCreatorStatus.textContent = "Choose a Basic quiz to load source questions.";
+        setSectionStatus(quizCreatorStatus, "warn", "Choose a Basic quiz to load source questions.");
         return;
     }
 
-    quizCreatorStatus.textContent = "Loading source questions...";
+    setSectionStatus(quizCreatorStatus, "warn", "Loading source questions...");
     quizCreatorTbody.innerHTML = "";
     quizCreatorPager.style.display = "none";
 
@@ -1567,15 +1702,15 @@ async function loadQuizCreatorPage(page = 1) {
         }
 
         if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            quizCreatorStatus.textContent = "Failed to load source questions: " + (text || res.status);
+            const text = await readResponseMessage(res);
+            setSectionStatus(quizCreatorStatus, "error", "Failed to load source questions: " + (text || res.status));
             return;
         }
 
         const pageData = await ApiJson.readJsonNormalized(res);
         renderQuizCreatorQuestionTable(pageData);
     } catch (err) {
-        quizCreatorStatus.textContent = "Error loading source questions: " + err.message;
+        setSectionStatus(quizCreatorStatus, "error", "Error loading source questions: " + err.message);
     }
 }
 
@@ -1592,17 +1727,17 @@ async function createQuizFromSelectedQuestions() {
 
     const title = (quizCreatorTitle.value || "").trim();
     if (!title) {
-        quizCreatorStatus.textContent = "Enter a title for the new quiz.";
+        setSectionStatus(quizCreatorStatus, "warn", "Enter a title for the new quiz.");
         return;
     }
 
     if (!quizCreatorState.selectedQuestions.length) {
-        quizCreatorStatus.textContent = "Add at least one question before creating a quiz.";
+        setSectionStatus(quizCreatorStatus, "warn", "Add at least one question before creating a quiz.");
         return;
     }
 
     quizCreatorSaveBtn.disabled = true;
-    quizCreatorStatus.textContent = "Creating quiz...";
+    setSectionStatus(quizCreatorStatus, "warn", "Creating quiz...");
 
     try {
         const res = await fetch("/api/admin/quiz-creator/create", {
@@ -1620,19 +1755,19 @@ async function createQuizFromSelectedQuestions() {
         });
 
         if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            quizCreatorStatus.textContent = "Create failed: " + (text || res.status);
+            const text = await readResponseMessage(res);
+            setSectionStatus(quizCreatorStatus, "error", "Create failed: " + (text || res.status));
             return;
         }
 
         const created = await ApiJson.readJsonNormalized(res);
-        quizCreatorStatus.textContent = `Created quiz "${created.title || title}" with ${created.questionCount ?? quizCreatorState.selectedQuestions.length} question(s).`;
+        setSectionStatus(quizCreatorStatus, "ok", `Created quiz "${created.title || title}" with ${created.questionCount ?? quizCreatorState.selectedQuestions.length} question(s).`);
         quizCreatorState.selectedQuestions = [];
         renderQuizCreatorSelectedList();
         await loadQuizzes();
         await loadQuizCreatorPage(quizCreatorState.page);
     } catch (err) {
-        quizCreatorStatus.textContent = "Error creating quiz: " + err.message;
+        setSectionStatus(quizCreatorStatus, "error", "Error creating quiz: " + err.message);
     } finally {
         quizCreatorSaveBtn.disabled = false;
     }
@@ -1659,12 +1794,12 @@ function renderQuestionEditorTable(pageData) {
     questionEditorState.page = Number(pageData.page ?? 1);
 
     if (!items.length) {
-        questionEditorStatus.textContent = "No questions found for this quiz.";
+        setSectionStatus(questionEditorStatus, "warn", "No questions found for this quiz.");
         questionEditorPager.style.display = "none";
         return;
     }
 
-    questionEditorStatus.textContent = `Loaded ${items.length} question(s) on page ${questionEditorState.page} of ${questionEditorState.totalPages || 1}.`;
+    setSectionStatus(questionEditorStatus, "ok", `Loaded ${items.length} question(s) on page ${questionEditorState.page} of ${questionEditorState.totalPages || 1}.`);
     questionEditorPager.style.display = "flex";
     questionEditorPageInfo.textContent = `Page ${questionEditorState.page} of ${questionEditorState.totalPages || 1}`;
     questionEditorPrevBtn.disabled = questionEditorState.page <= 1;
@@ -1703,7 +1838,7 @@ function renderQuestionEditorTable(pageData) {
                 ${answersHtml}
                 <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <button type="button" data-action="save-question" data-question-id="${escapeHtmlAttr(questionId)}">Save question</button>
-                    <span class="muted" data-role="save-status"></span>
+                    <div data-role="save-status" class="statusBanner" style="display:none; margin-top:0;"></div>
                 </div>
             </td>
         `;
@@ -1720,18 +1855,18 @@ async function loadQuestionEditorPage(page = 1) {
     questionEditorState.page = page;
 
     if (!token) {
-        questionEditorStatus.textContent = "Login required.";
+        setSectionStatus(questionEditorStatus, "warn", "Login required.");
         return;
     }
 
     if (!questionEditorState.quizId) {
         questionEditorTbody.innerHTML = "";
         questionEditorPager.style.display = "none";
-        questionEditorStatus.textContent = "Choose a quiz to begin editing questions.";
+        setSectionStatus(questionEditorStatus, "warn", "Choose a quiz to begin editing questions.");
         return;
     }
 
-    questionEditorStatus.textContent = "Loading question editor...";
+    setSectionStatus(questionEditorStatus, "warn", "Loading question editor...");
     questionEditorTbody.innerHTML = "";
     questionEditorPager.style.display = "none";
 
@@ -1753,15 +1888,15 @@ async function loadQuestionEditorPage(page = 1) {
         }
 
         if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            questionEditorStatus.textContent = "Failed to load question editor: " + (text || res.status);
+            const text = await readResponseMessage(res);
+            setSectionStatus(questionEditorStatus, "error", "Failed to load question editor: " + (text || res.status));
             return;
         }
 
         const pageData = await ApiJson.readJsonNormalized(res);
         renderQuestionEditorTable(pageData);
     } catch (err) {
-        questionEditorStatus.textContent = "Error loading question editor: " + err.message;
+        setSectionStatus(questionEditorStatus, "error", "Error loading question editor: " + err.message);
     }
 }
 
@@ -1788,7 +1923,7 @@ async function saveQuestionEditorRow(button) {
 
     if (!questionId) return;
 
-    if (statusEl) statusEl.textContent = "Saving...";
+    setSectionStatus(statusEl, "warn", "Saving...");
     button.disabled = true;
 
     try {
@@ -1806,14 +1941,14 @@ async function saveQuestionEditorRow(button) {
         });
 
         if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            if (statusEl) statusEl.textContent = "Save failed: " + (text || res.status);
+            const text = await readResponseMessage(res);
+            setSectionStatus(statusEl, "error", "Save failed: " + (text || res.status));
             return;
         }
 
-        if (statusEl) statusEl.textContent = "Saved.";
+        setSectionStatus(statusEl, "ok", "Saved.");
     } catch (err) {
-        if (statusEl) statusEl.textContent = "Error saving question: " + err.message;
+        setSectionStatus(statusEl, "error", "Error saving question: " + err.message);
     } finally {
         button.disabled = false;
     }
@@ -1823,7 +1958,7 @@ async function loadPreEmploymentConfig() {
     if (!token) return;
 
     try {
-        preEmploymentStatus.textContent = "Loading...";
+        setSectionStatus(preEmploymentStatus, "warn", "Loading...");
 
         if (!cachedQuizzes.length) {
             await loadQuizzes();
@@ -1834,7 +1969,7 @@ async function loadPreEmploymentConfig() {
         });
 
         if (!res.ok) {
-            preEmploymentStatus.textContent = "Failed to load pre-employment setup.";
+            setSectionStatus(preEmploymentStatus, "error", "Failed to load pre-employment setup.");
             return;
         }
 
@@ -1859,12 +1994,12 @@ async function loadPreEmploymentConfig() {
 
         const loadedCount = Number(cfg.questionCount || 20);
         const loadedTotal = selectedTitles.length ? loadedCount * selectedTitles.length : loadedCount;
-        preEmploymentStatus.textContent = selectedTitles.length
+        setSectionStatus(preEmploymentStatus, "ok", selectedTitles.length
             ? `Loaded. Current source exams: ${selectedTitles.join(", ")}. Saved count is ${loadedCount} per exam (${loadedTotal} total).`
-            : "Loaded. Select at least one source exam and save.";
+            : "Loaded. Select at least one source exam and save.");
     } catch (err) {
         console.error(err);
-        preEmploymentStatus.textContent = "Error loading pre-employment setup.";
+        setSectionStatus(preEmploymentStatus, "error", "Error loading pre-employment setup.");
     }
 }
 
@@ -1873,7 +2008,7 @@ async function savePreEmploymentConfig() {
 
     const quizIds = Array.from(preEmploymentQuizSelect.selectedOptions).map(o => o.value);
     if (!quizIds.length) {
-        preEmploymentStatus.textContent = "Choose at least one source exam title first.";
+        setSectionStatus(preEmploymentStatus, "warn", "Choose at least one source exam title first.");
         return;
     }
 
@@ -1888,7 +2023,7 @@ async function savePreEmploymentConfig() {
     };
 
     try {
-        preEmploymentStatus.textContent = "Saving...";
+        setSectionStatus(preEmploymentStatus, "warn", "Saving...");
 
         const res = await fetch("/api/preemployment/config", {
             method: "POST",
@@ -1900,8 +2035,8 @@ async function savePreEmploymentConfig() {
         });
 
         if (!res.ok) {
-            const text = await res.text();
-            preEmploymentStatus.textContent = "Save failed: " + text;
+            const text = await readResponseMessage(res);
+            setSectionStatus(preEmploymentStatus, "error", "Save failed: " + text);
             return;
         }
 
@@ -1912,12 +2047,12 @@ async function savePreEmploymentConfig() {
             : (saved.quizTitle ? [saved.quizTitle] : []);
         const savedPerQuizCount = Number(saved.questionCount || payload.questionCount || 0);
         const savedTotal = savedTitles.length ? savedPerQuizCount * savedTitles.length : savedPerQuizCount;
-        preEmploymentStatus.textContent = savedTitles.length
+        setSectionStatus(preEmploymentStatus, "ok", savedTitles.length
             ? `Saved. Pre-employment quiz now pulls ${savedPerQuizCount} random question(s) from each selected exam in ${savedTitles.join(", ")} (${savedTotal} total).`
-            : "Saved.";
+            : "Saved.");
     } catch (err) {
         console.error(err);
-        preEmploymentStatus.textContent = "Error saving pre-employment setup.";
+        setSectionStatus(preEmploymentStatus, "error", "Error saving pre-employment setup.");
     }
 }
 
@@ -1926,11 +2061,11 @@ async function loadImportHistory() {
     if (!historyStatus || !historyTbody) return;
 
     if (!token) {
-        historyStatus.textContent = "Login required.";
+        setSectionStatus(historyStatus, "warn", "Login required.");
         return;
     }
 
-    historyStatus.textContent = "Loading import history...";
+    setSectionStatus(historyStatus, "warn", "Loading import history...");
     historyTbody.innerHTML = "";
 
     try {
@@ -1939,18 +2074,18 @@ async function loadImportHistory() {
         });
 
         if (!res.ok) {
-            historyStatus.textContent = "Failed to load import history: " + res.status;
+            setSectionStatus(historyStatus, "error", "Failed to load import history: " + res.status);
             return;
         }
 
         const runs = await ApiJson.readJsonNormalized(res);
 
         if (!Array.isArray(runs) || runs.length === 0) {
-            historyStatus.textContent = "No import history yet.";
+            setSectionStatus(historyStatus, "warn", "No import history yet.");
             return;
         }
 
-        historyStatus.textContent = "Loaded " + runs.length + " run(s).";
+        setSectionStatus(historyStatus, "ok", "Loaded " + runs.length + " run(s).");
 
         for (const r of runs) {
             const imported = r.ImportedUtc || r.importedUtc;
@@ -1975,7 +2110,7 @@ async function loadImportHistory() {
             historyTbody.appendChild(tr);
         }
     } catch (err) {
-        historyStatus.textContent = "Error loading import history: " + err.message;
+        setSectionStatus(historyStatus, "error", "Error loading import history: " + err.message);
     }
 }
 
@@ -1983,11 +2118,11 @@ async function loadUsageReport() {
     const { usageStatus, usageSummary, usageTbody, recentAttemptsTbody } = getDashboardEls();
     if (!usageStatus || !usageTbody || !recentAttemptsTbody) return;
     if (!token) {
-        usageStatus.textContent = "Login required.";
+        setSectionStatus(usageStatus, "warn", "Login required.");
         return;
     }
 
-    usageStatus.textContent = "Loading usage report...";
+    setSectionStatus(usageStatus, "warn", "Loading usage report...");
     usageSummary.textContent = "";
     usageTbody.innerHTML = "";
     recentAttemptsTbody.innerHTML = "";
@@ -1997,7 +2132,7 @@ async function loadUsageReport() {
             headers: { "Authorization": "Bearer " + token }
         });
         if (!res.ok) {
-            usageStatus.textContent = "Failed to load usage report: " + res.status;
+            setSectionStatus(usageStatus, "error", "Failed to load usage report: " + res.status);
             return;
         }
 
@@ -2005,7 +2140,7 @@ async function loadUsageReport() {
         const usageRows = Array.isArray(data.mostTakenQuizzes) ? data.mostTakenQuizzes : [];
         const recentRows = Array.isArray(data.recentAttempts) ? data.recentAttempts : [];
         usageSummary.textContent = `Total attempts: ${data.totalAttempts ?? 0} | Unique users: ${data.uniqueUsers ?? 0}`;
-        usageStatus.textContent = usageRows.length ? "Usage report loaded." : "No quiz attempts recorded yet.";
+        setSectionStatus(usageStatus, usageRows.length ? "ok" : "warn", usageRows.length ? "Usage report loaded." : "No quiz attempts recorded yet.");
 
         for (const item of usageRows) {
             const tr = document.createElement("tr");
@@ -2031,7 +2166,7 @@ async function loadUsageReport() {
             recentAttemptsTbody.appendChild(tr);
         }
     } catch (err) {
-        usageStatus.textContent = "Error loading usage report: " + err.message;
+        setSectionStatus(usageStatus, "error", "Error loading usage report: " + err.message);
     }
 }
 
@@ -2039,11 +2174,11 @@ async function loadPreEmploymentSubmissions() {
     const { submissionStatus, submissionTbody } = getDashboardEls();
     if (!submissionStatus || !submissionTbody) return;
     if (!token) {
-        submissionStatus.textContent = "Login required.";
+        setSectionStatus(submissionStatus, "warn", "Login required.");
         return;
     }
 
-    submissionStatus.textContent = "Loading submissions...";
+    setSectionStatus(submissionStatus, "warn", "Loading submissions...");
     submissionTbody.innerHTML = "";
 
     try {
@@ -2051,17 +2186,17 @@ async function loadPreEmploymentSubmissions() {
             headers: { "Authorization": "Bearer " + token }
         });
         if (!res.ok) {
-            submissionStatus.textContent = "Failed to load submissions: " + res.status;
+            setSectionStatus(submissionStatus, "error", "Failed to load submissions: " + res.status);
             return;
         }
 
         const rows = await ApiJson.readJsonNormalized(res);
         if (!Array.isArray(rows) || rows.length === 0) {
-            submissionStatus.textContent = "No pre-employment submissions yet.";
+            setSectionStatus(submissionStatus, "warn", "No pre-employment submissions yet.");
             return;
         }
 
-        submissionStatus.textContent = `Loaded ${rows.length} submission(s).`;
+        setSectionStatus(submissionStatus, "ok", `Loaded ${rows.length} submission(s).`);
         for (const row of rows) {
             const firstName = row.FirstName ?? row.firstName ?? "";
             const lastName = row.LastName ?? row.lastName ?? "";
@@ -2086,7 +2221,7 @@ async function loadPreEmploymentSubmissions() {
             submissionTbody.appendChild(tr);
         }
     } catch (err) {
-        submissionStatus.textContent = "Error loading submissions: " + err.message;
+        setSectionStatus(submissionStatus, "error", "Error loading submissions: " + err.message);
     }
 }
 
@@ -2267,9 +2402,9 @@ function wireDashboardButtonsOnce() {
         exportImportHistoryBtn.addEventListener("click", async () => {
             try {
                 await downloadAuthorizedFile("/api/admin/reports/import-history.csv", "import-history.csv");
-                statusBox.textContent = "Downloaded import history CSV.";
+                setMainStatus("ok", "Downloaded import history CSV.");
             } catch (err) {
-                statusBox.textContent = "ERROR " + err.message;
+                setMainStatus("error", err.message);
             }
         });
     }
@@ -2284,9 +2419,9 @@ function wireDashboardButtonsOnce() {
         exportUserActivityBtn.addEventListener("click", async () => {
             try {
                 await downloadAuthorizedFile("/api/admin/reports/user-activity.csv", "user-activity.csv");
-                statusBox.textContent = "Downloaded user activity CSV.";
+                setMainStatus("ok", "Downloaded user activity CSV.");
             } catch (err) {
-                statusBox.textContent = "ERROR " + err.message;
+                setMainStatus("error", err.message);
             }
         });
     }
@@ -2327,7 +2462,7 @@ function wireDashboardButtonsOnce() {
                 `);
                 popup.document.close();
             } catch {
-                submissionStatus.textContent = "Could not prepare printable summary.";
+                setSectionStatus(submissionStatus, "error", "Could not prepare printable summary.");
             }
         });
     }
@@ -2358,7 +2493,7 @@ function wireDashboardButtonsOnce() {
             if (action === "copy") {
                 try {
                     await navigator.clipboard.writeText(id);
-                    if (quizStatus) quizStatus.textContent = "Copied quiz ID: " + id;
+                    setSectionStatus(quizStatus, "ok", "Copied quiz ID: " + id);
                 } catch {
                     const tmp = document.createElement("textarea");
                     tmp.value = id;
@@ -2366,7 +2501,7 @@ function wireDashboardButtonsOnce() {
                     tmp.select();
                     document.execCommand("copy");
                     document.body.removeChild(tmp);
-                    if (quizStatus) quizStatus.textContent = "Copied quiz ID: " + id;
+                    setSectionStatus(quizStatus, "ok", "Copied quiz ID: " + id);
                 }
                 return;
             }
@@ -2378,7 +2513,7 @@ function wireDashboardButtonsOnce() {
 
             if (action === "archive" || action === "restore") {
                 const verb = action === "archive" ? "Archiving" : "Restoring";
-                if (quizStatus) quizStatus.textContent = verb + " quiz...";
+                setSectionStatus(quizStatus, "warn", verb + " quiz...");
 
                 try {
                     const res = await fetch(`/api/quiz/${encodeURIComponent(id)}/${action}`, {
@@ -2386,16 +2521,16 @@ function wireDashboardButtonsOnce() {
                         headers: { "Authorization": "Bearer " + token }
                     });
 
-                    const payload = await res.text().catch(() => "");
+                    const payload = await readResponseMessage(res);
                     if (!res.ok) {
-                        if (quizStatus) quizStatus.textContent = `${action} failed: ${res.status}${payload ? " - " + payload : ""}`;
+                        setSectionStatus(quizStatus, "error", `${action} failed: ${res.status}${payload ? " - " + payload : ""}`);
                         return;
                     }
 
-                    if (quizStatus) quizStatus.textContent = action === "archive" ? "Quiz archived." : "Quiz restored.";
+                    setSectionStatus(quizStatus, "ok", action === "archive" ? "Quiz archived." : "Quiz restored.");
                     await loadQuizzes();
                 } catch (err) {
-                    if (quizStatus) quizStatus.textContent = `Error during ${action}: ` + err.message;
+                    setSectionStatus(quizStatus, "error", `Error during ${action}: ` + err.message);
                 }
                 return;
             }
@@ -2404,7 +2539,7 @@ function wireDashboardButtonsOnce() {
                 const confirmText = prompt("Type DELETE to permanently delete this quiz (then re-import from CSV):");
                 if (confirmText !== "DELETE") return;
 
-                if (quizStatus) quizStatus.textContent = "Deleting quiz...";
+                setSectionStatus(quizStatus, "warn", "Deleting quiz...");
 
                 try {
                     const res = await fetch("/api/quiz/" + encodeURIComponent(id), {
@@ -2413,15 +2548,15 @@ function wireDashboardButtonsOnce() {
                     });
 
                     if (!res.ok) {
-                        const msg = await res.text().catch(() => "");
-                        if (quizStatus) quizStatus.textContent = "Delete failed: " + res.status + (msg ? (" - " + msg) : "");
+                        const msg = await readResponseMessage(res);
+                        setSectionStatus(quizStatus, "error", "Delete failed: " + res.status + (msg ? (" - " + msg) : ""));
                         return;
                     }
 
-                    if (quizStatus) quizStatus.textContent = "Deleted quiz " + id;
+                    setSectionStatus(quizStatus, "ok", "Deleted quiz " + id);
                     await loadQuizzes();
                 } catch (err) {
-                    if (quizStatus) quizStatus.textContent = "Error deleting quiz: " + err.message;
+                    setSectionStatus(quizStatus, "error", "Error deleting quiz: " + err.message);
                 }
             }
         });
@@ -2471,7 +2606,7 @@ document.addEventListener("DOMContentLoaded", () => {
         Show archived
     </label>
 
-    <div id="quizStatus" class="status"></div>
+    <div id="quizStatus" class="statusBanner" style="display:none;"></div>
     <table id="quizTable" style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
         <thead>
             <tr>
@@ -2509,7 +2644,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <button id="questionEditorRefreshBtn" type="button">Load questions</button>
         </div>
     </div>
-    <div id="questionEditorStatus" class="status" style="margin-top:10px;">Choose a quiz to begin editing questions.</div>
+    <div id="questionEditorStatus" class="statusBanner warn" style="margin-top:10px;">Choose a quiz to begin editing questions.</div>
     <div class="editorScrollArea">
         <table style="width:100%; border-collapse:collapse;">
             <thead>
@@ -2549,7 +2684,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <button id="quizCreatorRefreshBtn" type="button">Load questions</button>
         </div>
     </div>
-    <div id="quizCreatorStatus" class="status" style="margin-top:10px;">Choose a Basic quiz to load source questions.</div>
+    <div id="quizCreatorStatus" class="statusBanner warn" style="margin-top:10px;">Choose a Basic quiz to load source questions.</div>
     <div style="display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(280px, 0.8fr); gap:18px; margin-top:14px; align-items:start;">
         <div>
             <div class="editorScrollArea">
@@ -2598,7 +2733,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <h2>Import History</h2>
     <button id="refreshHistoryBtn" type="button">Refresh history</button>
     <button id="exportImportHistoryBtn" type="button">Export import history CSV</button>
-    <div id="historyStatus" class="status"></div>
+    <div id="historyStatus" class="statusBanner" style="display:none;"></div>
     <table id="historyTable" style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
         <thead>
             <tr>
@@ -2618,7 +2753,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <h2>User Metrics</h2>
     <button id="refreshUsageBtn" type="button">Refresh usage report</button>
     <button id="exportUserActivityBtn" type="button">Export user activity CSV</button>
-    <div id="usageStatus" class="status"></div>
+    <div id="usageStatus" class="statusBanner" style="display:none;"></div>
     <div class="muted" id="usageSummary" style="margin-top:8px;"></div>
     <table style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
         <thead>
@@ -2652,7 +2787,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <hr />
     <h2>Pre-Employment Attempts</h2>
     <button id="refreshSubmissionsBtn" type="button">Refresh submissions</button>
-    <div id="submissionStatus" class="status"></div>
+    <div id="submissionStatus" class="statusBanner" style="display:none;"></div>
     <table style="width:100%; border-collapse:collapse; margin-top:0.75rem;">
         <thead>
             <tr>

@@ -188,10 +188,11 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
             form.Add(packageContent, "File", Path.GetFileName(packagePath));
 
             using var uploadResponse = await client.PostAsync("/api/import/upload-package", form);
-            Assert.Equal(HttpStatusCode.InternalServerError, uploadResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, uploadResponse.StatusCode);
 
             var body = await uploadResponse.Content.ReadAsStringAsync();
             Assert.Contains("exactly one .csv file", body, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Next step", body, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
