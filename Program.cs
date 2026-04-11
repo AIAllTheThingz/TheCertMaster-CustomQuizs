@@ -250,6 +250,15 @@ builder.Services.AddHealthChecks()
 builder.Services.AddScoped<QuizQueryService>();
 builder.Services.AddScoped<QuizImportService>();
 builder.Services.AddScoped<IPreEmploymentConfigStore, FilePreEmploymentConfigStore>();
+builder.Services.Configure<ActiveDirectoryOptions>(builder.Configuration.GetSection("ActiveDirectory"));
+if (OperatingSystem.IsWindows())
+{
+    builder.Services.AddScoped<IActiveDirectoryAuthService, ActiveDirectoryAuthService>();
+}
+else
+{
+    builder.Services.AddScoped<IActiveDirectoryAuthService, NoOpActiveDirectoryAuthService>();
+}
 
 // SMTP settings + email service (supports authenticated and unauthenticated relay)
 builder.Services.AddScoped<ISmtpSettingsStore, FileSmtpSettingsStore>();

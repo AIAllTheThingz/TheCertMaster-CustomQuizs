@@ -4,9 +4,13 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using QuizAPI.Data;
 using QuizAPI.Models;
+using QuizAPI.Services;
 using Xunit;
 
 namespace QuizAPI.Tests;
@@ -33,6 +37,77 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
         using var response = await client.GetAsync("/health");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Local_Login_Remains_Primary_When_Active_Directory_Is_Enabled()
+    {
+        await _factory.InitializeAsync();
+
+        var fakeAd = new FakeActiveDirectoryAuthService();
+        using var app = CreateFactoryWithActiveDirectory(fakeAd);
+        using var client = app.CreateClient();
+
+        using var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            Email = "local.only@example.com",
+            FirstName = "Local",
+            LastName = "Only",
+            Password = "Employee123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, registerResponse.StatusCode);
+
+        using var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            Email = "local.only@example.com",
+            Password = "Employee123!"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        Assert.Equal(0, fakeAd.CallCount);
+    }
+
+    [Fact]
+    public async Task Active_Directory_Login_Auto_Provisions_Local_User_And_Maps_Roles()
+    {
+        await _factory.InitializeAsync();
+
+        var fakeAd = new FakeActiveDirectoryAuthService
+        {
+            Result = new ActiveDirectoryAuthResult
+            {
+                Email = "employee.ad@example.com",
+                UserName = "employee.ad@example.com",
+                FirstName = "Taylor",
+                LastName = "Domain",
+                Groups = new List<string> { "TCM_Admins", "TCM_Users" },
+                Roles = new List<string> { "Admin", "User" }
+            }
+        };
+
+        using var app = CreateFactoryWithActiveDirectory(fakeAd);
+        using var client = app.CreateClient();
+
+        using var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            Email = "employee.ad@example.com",
+            Password = "DomainPassword123!"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        Assert.Equal(1, fakeAd.CallCount);
+
+        using var scope = app.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var provisionedUser = await userManager.FindByEmailAsync("employee.ad@example.com");
+
+        Assert.NotNull(provisionedUser);
+        Assert.Equal("Taylor", provisionedUser!.FirstName);
+        Assert.Equal("Domain", provisionedUser.LastName);
+
+        var roles = await userManager.GetRolesAsync(provisionedUser);
+        Assert.Contains("Admin", roles);
+        Assert.Contains("User", roles);
     }
 
     [Fact]
@@ -1262,6 +1337,29 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
         return await LoginAsync(client, _factory.SeedAdminEmail, _factory.SeedAdminPassword);
     }
 
+    private Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> CreateFactoryWithActiveDirectory(FakeActiveDirectoryAuthService fakeAdService)
+    {
+        return _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ActiveDirectory:Enabled"] = "true",
+                    ["ActiveDirectory:DefaultRole"] = "User",
+                    ["ActiveDirectory:AdminGroups:0"] = "TCM_Admins",
+                    ["ActiveDirectory:UserGroups:0"] = "TCM_Users"
+                });
+            });
+
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IActiveDirectoryAuthService>();
+                services.AddSingleton<IActiveDirectoryAuthService>(fakeAdService);
+            });
+        });
+    }
+
     private async Task<string> LoginAsync(HttpClient client, string email, string password)
     {
         using var response = await client.PostAsJsonAsync("/api/auth/login", new
@@ -1495,5 +1593,17 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
         public Guid QuizId { get; set; }
         public string Title { get; set; } = string.Empty;
         public int QuestionCount { get; set; }
+    }
+
+    private sealed class FakeActiveDirectoryAuthService : IActiveDirectoryAuthService
+    {
+        public int CallCount { get; private set; }
+        public ActiveDirectoryAuthResult? Result { get; set; }
+
+        public Task<ActiveDirectoryAuthResult?> AuthenticateAsync(string login, string password, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(Result);
+        }
     }
 }

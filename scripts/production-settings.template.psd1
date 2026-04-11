@@ -32,5 +32,15 @@
     BootstrapAdminFirstName = 'Server'
     BootstrapAdminLastName = 'Admin'
 
+    ActiveDirectoryEnabled = $false
+    ActiveDirectoryDomain = ''
+    ActiveDirectoryContainer = ''
+    ActiveDirectoryNetBiosDomain = ''
+    ActiveDirectoryUserPrincipalSuffix = ''
+    ActiveDirectoryRequireMappedRole = $false
+    ActiveDirectoryDefaultRole = 'User'
+    ActiveDirectoryAdminGroups = @()
+    ActiveDirectoryUserGroups = @()
+
     EnableSmokeTest = $true
 }

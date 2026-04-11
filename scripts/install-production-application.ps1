@@ -29,6 +29,15 @@ param(
     [string]$BootstrapAdminPassword = '',
     [string]$BootstrapAdminFirstName = '',
     [string]$BootstrapAdminLastName = '',
+    [bool]$ActiveDirectoryEnabled = $false,
+    [string]$ActiveDirectoryDomain = '',
+    [string]$ActiveDirectoryContainer = '',
+    [string]$ActiveDirectoryNetBiosDomain = '',
+    [string]$ActiveDirectoryUserPrincipalSuffix = '',
+    [bool]$ActiveDirectoryRequireMappedRole = $false,
+    [string]$ActiveDirectoryDefaultRole = 'User',
+    [string[]]$ActiveDirectoryAdminGroups = @(),
+    [string[]]$ActiveDirectoryUserGroups = @(),
     [switch]$EnableSmokeTest
 )
 
@@ -442,6 +451,15 @@ Write-Step 'Deploying application to IIS'
     -BootstrapAdminPassword $BootstrapAdminPassword `
     -BootstrapAdminFirstName $BootstrapAdminFirstName `
     -BootstrapAdminLastName $BootstrapAdminLastName `
+    -ActiveDirectoryEnabled:$ActiveDirectoryEnabled `
+    -ActiveDirectoryDomain $ActiveDirectoryDomain `
+    -ActiveDirectoryContainer $ActiveDirectoryContainer `
+    -ActiveDirectoryNetBiosDomain $ActiveDirectoryNetBiosDomain `
+    -ActiveDirectoryUserPrincipalSuffix $ActiveDirectoryUserPrincipalSuffix `
+    -ActiveDirectoryRequireMappedRole:$ActiveDirectoryRequireMappedRole `
+    -ActiveDirectoryDefaultRole $ActiveDirectoryDefaultRole `
+    -ActiveDirectoryAdminGroups $ActiveDirectoryAdminGroups `
+    -ActiveDirectoryUserGroups $ActiveDirectoryUserGroups `
     -CertificateThumbprint $CertificateThumbprint
 
 if ($LASTEXITCODE -ne 0) {

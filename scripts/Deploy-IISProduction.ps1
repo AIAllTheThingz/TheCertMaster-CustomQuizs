@@ -19,6 +19,15 @@ param(
     [string]$BootstrapAdminPassword = "",
     [string]$BootstrapAdminFirstName = "",
     [string]$BootstrapAdminLastName = "",
+    [bool]$ActiveDirectoryEnabled = $false,
+    [string]$ActiveDirectoryDomain = "",
+    [string]$ActiveDirectoryContainer = "",
+    [string]$ActiveDirectoryNetBiosDomain = "",
+    [string]$ActiveDirectoryUserPrincipalSuffix = "",
+    [bool]$ActiveDirectoryRequireMappedRole = $false,
+    [string]$ActiveDirectoryDefaultRole = "User",
+    [string[]]$ActiveDirectoryAdminGroups = @(),
+    [string[]]$ActiveDirectoryUserGroups = @(),
     [string]$CertificateThumbprint = "",
     [switch]$UseRootHttpsBinding,
     [switch]$RunMigrations
@@ -67,6 +76,26 @@ function Set-IisAspNetCoreEnvVar {
     }
     else {
         Add-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $Location -Filter $filterBase -Name "." -Value @{ name = $Name; value = $Value } | Out-Null
+    }
+}
+
+function Remove-IisAspNetCoreEnvVarsByPrefix {
+    param(
+        [string]$Location,
+        [string]$Prefix
+    )
+
+    $filterBase = "system.webServer/aspNetCore/environmentVariables"
+    $existing = Get-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $Location -Filter $filterBase -Name "." -ErrorAction SilentlyContinue
+
+    if ($null -eq $existing) {
+        return
+    }
+
+    foreach ($item in @($existing.Collection)) {
+        if ($item -and $item.Attributes["name"] -and $item.Attributes["name"].Value -like "$Prefix*") {
+            Remove-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $Location -Filter $filterBase -Name "." -AtElement @{ name = $item.Attributes["name"].Value } | Out-Null
+        }
     }
 }
 
@@ -191,6 +220,24 @@ if (-not [string]::IsNullOrWhiteSpace($BootstrapAdminEmail)) {
     if (-not [string]::IsNullOrWhiteSpace($BootstrapAdminLastName)) {
         Set-IisAspNetCoreEnvVar -Location $SiteName -Name "BootstrapAdmin__LastName" -Value $BootstrapAdminLastName
     }
+}
+
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__Enabled" -Value $ActiveDirectoryEnabled.ToString().ToLowerInvariant()
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__Domain" -Value $ActiveDirectoryDomain
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__Container" -Value $ActiveDirectoryContainer
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__NetBiosDomain" -Value $ActiveDirectoryNetBiosDomain
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__UserPrincipalSuffix" -Value $ActiveDirectoryUserPrincipalSuffix
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__RequireMappedRole" -Value $ActiveDirectoryRequireMappedRole.ToString().ToLowerInvariant()
+Set-IisAspNetCoreEnvVar -Location $SiteName -Name "ActiveDirectory__DefaultRole" -Value $ActiveDirectoryDefaultRole
+
+Remove-IisAspNetCoreEnvVarsByPrefix -Location $SiteName -Prefix "ActiveDirectory__AdminGroups__"
+for ($i = 0; $i -lt $ActiveDirectoryAdminGroups.Count; $i++) {
+    Set-IisAspNetCoreEnvVar -Location $SiteName -Name ("ActiveDirectory__AdminGroups__" + $i) -Value $ActiveDirectoryAdminGroups[$i]
+}
+
+Remove-IisAspNetCoreEnvVarsByPrefix -Location $SiteName -Prefix "ActiveDirectory__UserGroups__"
+for ($i = 0; $i -lt $ActiveDirectoryUserGroups.Count; $i++) {
+    Set-IisAspNetCoreEnvVar -Location $SiteName -Name ("ActiveDirectory__UserGroups__" + $i) -Value $ActiveDirectoryUserGroups[$i]
 }
 
 if ($Protocol -eq "https" -and -not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {

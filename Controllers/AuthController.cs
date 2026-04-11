@@ -8,6 +8,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using QuizAPI.Models;
+using QuizAPI.Services;
 
 namespace QuizAPI.Controllers
 {
@@ -15,19 +16,27 @@ namespace QuizAPI.Controllers
     [Route("api/auth")]
     public class AuthController : ControllerBase
     {
+        private const string DefaultAdProvisionedFirstName = "Directory";
+        private const string DefaultAdProvisionedLastName = "User";
         private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly SignInManager<AppUser> _signInManager;
+        private readonly IActiveDirectoryAuthService _activeDirectoryAuthService;
         private readonly IConfiguration _config;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager,
             SignInManager<AppUser> signInManager,
+            IActiveDirectoryAuthService activeDirectoryAuthService,
             IConfiguration config,
             ILogger<AuthController> logger)
         {
             _userManager = userManager;
+            _roleManager = roleManager;
             _signInManager = signInManager;
+            _activeDirectoryAuthService = activeDirectoryAuthService;
             _config = config;
             _logger = logger;
         }
@@ -93,25 +102,144 @@ namespace QuizAPI.Controllers
                 return BadRequest("Email and password are required.");
 
             var user = await _userManager.FindByEmailAsync(email);
-            if (user == null)
+            if (user != null)
             {
-                _logger.LogWarning("Login failed for unknown email {Email}.", email);
-                return Unauthorized("Invalid email or password");
+                var roles = await _userManager.GetRolesAsync(user);
+                var shouldLockoutOnFailure = !roles.Contains("Admin", StringComparer.OrdinalIgnoreCase);
+                var valid = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: shouldLockoutOnFailure);
+                if (valid.Succeeded)
+                {
+                    var (token, expiresUtc) = GenerateJwtToken(user, roles);
+                    _logger.LogInformation("Login succeeded for {Email} using local Identity.", email);
+                    return Ok(new { token, expiresUtc });
+                }
             }
 
-            var roles = await _userManager.GetRolesAsync(user);
-            var shouldLockoutOnFailure = !roles.Contains("Admin", StringComparer.OrdinalIgnoreCase);
-            var valid = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: shouldLockoutOnFailure);
-            if (!valid.Succeeded)
+            var activeDirectoryUser = await SignInWithActiveDirectoryAsync(email, password);
+            if (activeDirectoryUser is null)
             {
                 _logger.LogWarning("Login failed for {Email}.", email);
                 return Unauthorized("Invalid email or password");
             }
 
-            var (token, expiresUtc) = GenerateJwtToken(user, roles);
-            _logger.LogInformation("Login succeeded for {Email}.", email);
+            var (provisionedUser, adRoles) = activeDirectoryUser.Value;
+            var (adToken, adExpiresUtc) = GenerateJwtToken(provisionedUser, adRoles);
+            _logger.LogInformation("Login succeeded for {Email} using Active Directory.", email);
 
-            return Ok(new { token, expiresUtc });
+            return Ok(new { token = adToken, expiresUtc = adExpiresUtc });
+        }
+
+        private async Task<(AppUser User, IList<string> Roles)?> SignInWithActiveDirectoryAsync(string email, string password)
+        {
+            var adResult = await _activeDirectoryAuthService.AuthenticateAsync(email, password, HttpContext.RequestAborted);
+            if (adResult is null)
+            {
+                return null;
+            }
+
+            var normalizedEmail = string.IsNullOrWhiteSpace(adResult.Email) ? email : adResult.Email.Trim();
+            var user = await _userManager.FindByEmailAsync(normalizedEmail);
+            var needsCreate = user is null;
+
+            if (user is null)
+            {
+                user = new AppUser
+                {
+                    UserName = normalizedEmail,
+                    Email = normalizedEmail,
+                    FirstName = string.IsNullOrWhiteSpace(adResult.FirstName) ? DefaultAdProvisionedFirstName : adResult.FirstName.Trim(),
+                    LastName = string.IsNullOrWhiteSpace(adResult.LastName) ? DefaultAdProvisionedLastName : adResult.LastName.Trim(),
+                    EmailConfirmed = true
+                };
+
+                var createResult = await _userManager.CreateAsync(user);
+                if (!createResult.Succeeded)
+                {
+                    _logger.LogWarning("Active Directory login succeeded for {Email}, but local provisioning failed: {Errors}",
+                        normalizedEmail,
+                        string.Join("; ", createResult.Errors.Select(e => e.Description)));
+                    return null;
+                }
+            }
+            else
+            {
+                var needsUpdate = false;
+                if (!string.Equals(user.UserName, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+                {
+                    user.UserName = normalizedEmail;
+                    needsUpdate = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(adResult.FirstName) && !string.Equals(user.FirstName, adResult.FirstName, StringComparison.Ordinal))
+                {
+                    user.FirstName = adResult.FirstName.Trim();
+                    needsUpdate = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(adResult.LastName) && !string.Equals(user.LastName, adResult.LastName, StringComparison.Ordinal))
+                {
+                    user.LastName = adResult.LastName.Trim();
+                    needsUpdate = true;
+                }
+
+                if (!user.EmailConfirmed)
+                {
+                    user.EmailConfirmed = true;
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate)
+                {
+                    var updateResult = await _userManager.UpdateAsync(user);
+                    if (!updateResult.Succeeded)
+                    {
+                        _logger.LogWarning("Failed to update local profile during Active Directory login for {Email}: {Errors}",
+                            normalizedEmail,
+                            string.Join("; ", updateResult.Errors.Select(e => e.Description)));
+                        return null;
+                    }
+                }
+            }
+
+            var mappedRoles = adResult.Roles.Count > 0
+                ? adResult.Roles.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                : new List<string> { "User" };
+
+            foreach (var role in mappedRoles)
+            {
+                if (!await _roleManager.RoleExistsAsync(role))
+                {
+                    var createRoleResult = await _roleManager.CreateAsync(new IdentityRole(role));
+                    if (!createRoleResult.Succeeded)
+                    {
+                        _logger.LogWarning("Failed to create application role {Role} during Active Directory login for {Email}: {Errors}",
+                            role,
+                            normalizedEmail,
+                            string.Join("; ", createRoleResult.Errors.Select(e => e.Description)));
+                        return null;
+                    }
+                }
+
+                if (!await _userManager.IsInRoleAsync(user, role))
+                {
+                    var addRoleResult = await _userManager.AddToRoleAsync(user, role);
+                    if (!addRoleResult.Succeeded)
+                    {
+                        _logger.LogWarning("Failed to assign application role {Role} during Active Directory login for {Email}: {Errors}",
+                            role,
+                            normalizedEmail,
+                            string.Join("; ", addRoleResult.Errors.Select(e => e.Description)));
+                        return null;
+                    }
+                }
+            }
+
+            _logger.LogInformation("Active Directory login {Action} local account for {Email} with roles: {Roles}",
+                needsCreate ? "provisioned" : "updated",
+                normalizedEmail,
+                string.Join(", ", mappedRoles));
+
+            return (user, mappedRoles);
         }
 
         private (string Token, DateTime ExpiresUtc) GenerateJwtToken(AppUser user, IList<string> roles)
