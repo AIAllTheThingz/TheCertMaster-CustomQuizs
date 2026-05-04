@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
     [string]$ZipPath = "C:\Deploy\DeploymentBundle\QuizAPI_IIS_Production_20260318_182000.zip",
+    [string]$SourcePath = "",
     [string]$SiteName = "QuizAPI",
     [string]$SitePath = "C:\sites\QuizAPI\current",
     [string]$HostName = "WIN2K22IIS01",
@@ -179,8 +180,12 @@ if ($JwtKey.Length -lt 32) {
     throw "JwtKey must be at least 32 characters."
 }
 
-if (-not (Test-Path $ZipPath)) {
+if ([string]::IsNullOrWhiteSpace($SourcePath) -and -not (Test-Path $ZipPath)) {
     throw "ZipPath not found: $ZipPath"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($SourcePath) -and -not (Test-Path -LiteralPath $SourcePath)) {
+    throw "SourcePath not found: $SourcePath"
 }
 
 if ($Port -lt 1 -or $Port -gt 65535) {
@@ -213,20 +218,27 @@ if (Test-Path "IIS:\AppPools\$AppPoolName") {
 Write-Step "Ensuring deployment path exists"
 Ensure-Directory -Path $SitePath
 
-Write-Step "Expanding deployment package"
-$stagingPath = Join-Path ([System.IO.Path]::GetTempPath()) ("QuizAPI_Deploy_" + [System.Guid]::NewGuid().ToString("N"))
-Ensure-Directory -Path $stagingPath
-
-try {
-    Expand-Archive -LiteralPath $ZipPath -DestinationPath $stagingPath -Force
-    $packageRoot = Join-Path $stagingPath 'TheCertMaster-CustomQuizs'
-    $copySource = if (Test-Path -LiteralPath $packageRoot) { $packageRoot } else { $stagingPath }
+if (-not [string]::IsNullOrWhiteSpace($SourcePath)) {
+    Write-Step "Copying published deployment payload"
     Clear-DirectoryContents -Path $SitePath
-    Copy-Item -Path (Join-Path $copySource '*') -Destination $SitePath -Recurse -Force
+    Copy-Item -Path (Join-Path $SourcePath '*') -Destination $SitePath -Recurse -Force
 }
-finally {
-    if (Test-Path $stagingPath) {
-        Remove-Item -LiteralPath $stagingPath -Recurse -Force -ErrorAction SilentlyContinue
+else {
+    Write-Step "Expanding deployment package"
+    $stagingPath = Join-Path ([System.IO.Path]::GetTempPath()) ("QuizAPI_Deploy_" + [System.Guid]::NewGuid().ToString("N"))
+    Ensure-Directory -Path $stagingPath
+
+    try {
+        Expand-Archive -LiteralPath $ZipPath -DestinationPath $stagingPath -Force
+        $packageRoot = Join-Path $stagingPath 'TheCertMaster-CustomQuizs'
+        $copySource = if (Test-Path -LiteralPath $packageRoot) { $packageRoot } else { $stagingPath }
+        Clear-DirectoryContents -Path $SitePath
+        Copy-Item -Path (Join-Path $copySource '*') -Destination $SitePath -Recurse -Force
+    }
+    finally {
+        if (Test-Path $stagingPath) {
+            Remove-Item -LiteralPath $stagingPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 

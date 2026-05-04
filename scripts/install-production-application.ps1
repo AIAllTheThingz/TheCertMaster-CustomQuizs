@@ -482,9 +482,9 @@ $sourceRoot = Resolve-SourceRoot
 $dotnetExe = Ensure-DotNetInstalled
 Initialize-DotNetEnvironment -DotNetExe $dotnetExe
 $dotnetEfExe = Ensure-DotNetEfInstalled
-$publishScript = Join-Path $PSScriptRoot 'Publish-IISPackage.ps1'
 $deployScript = Join-Path $PSScriptRoot 'Deploy-IISProduction.ps1'
 $smokeTestScript = Join-Path $PSScriptRoot 'post-deploy-smoke-test.ps1'
+$deploymentPublishPath = Join-Path $DeploymentRoot 'site-publish'
 
 if ($RestoreSeedDatabase) {
     Write-Step "Restoring seeded $DatabaseName content from the repository backup"
@@ -534,26 +534,21 @@ elseif (-not $RestoreSeedDatabase -and -not (Test-QuizDataExists)) {
     Write-Warning "No quizzes were found after migration-only install. This is allowed when RestoreSeedDatabase is disabled."
 }
 
-Write-Step 'Building deployment package'
-& $publishScript -Configuration 'Release'
-if ($LASTEXITCODE -ne 0) {
-    throw 'Publish script failed.'
+Write-Step 'Publishing application payload for IIS deployment'
+if (Test-Path -LiteralPath $deploymentPublishPath) {
+    Remove-Item -LiteralPath $deploymentPublishPath -Recurse -Force
 }
 
-$deploymentZip = Get-ChildItem -Path (Join-Path $sourceRoot 'DeploymentBundle') -File |
-    Where-Object { $_.Name -like 'TheCertMaster-CustomQuizs-release-bundle-*.zip' -or $_.Name -like 'QuizAPI_IIS_Production_*.zip' } |
-    Sort-Object LastWriteTimeUtc -Descending |
-    Select-Object -First 1
-
-if ($null -eq $deploymentZip) {
-    throw 'No deployment bundle was found after publish.'
+& $dotnetExe publish (Join-Path $sourceRoot 'QuizAPI.csproj') -c Release --no-restore -o $deploymentPublishPath
+if ($LASTEXITCODE -ne 0) {
+    throw 'dotnet publish failed.'
 }
 
 $deployPort = if ($Protocol -eq 'https') { $HttpsPort } else { $HttpPort }
 
 Write-Step 'Deploying application to IIS'
 & $deployScript `
-    -ZipPath $deploymentZip.FullName `
+    -SourcePath $deploymentPublishPath `
     -SiteName $SiteName `
     -SitePath $SitePath `
     -HostName $HostName `
