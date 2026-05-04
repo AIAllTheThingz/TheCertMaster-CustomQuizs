@@ -90,26 +90,46 @@ if (Test-Path $publishPath) {
 
 Invoke-NativeCommand -FilePath "dotnet" -Arguments @("publish", $projectFullPath, "-c", $Configuration, "--no-build", "-o", $publishPath)
 
-Write-Step "Adding deployment support files"
-$supportItems = @(
-    "scripts",
-    "DEPLOY_IIS_PRODUCTION.md",
-    "README_INSTALL.txt",
-    "IMPORT_PACKAGE_SAMPLE.md",
-    "Documentation"
+Write-Step "Preparing source-style release bundle contents"
+if (Test-Path $packageRootPath) {
+    Remove-Item -LiteralPath $packageRootPath -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $packageContentPath -Force | Out-Null
+
+$excludedRootNames = @(
+    '.git',
+    '.codex-local-run',
+    'bin',
+    'obj',
+    'publish'
 )
 
-foreach ($item in $supportItems) {
-    $sourcePath = Join-Path $repoRoot $item
+Get-ChildItem -LiteralPath $repoRoot -Force | Where-Object {
+    $excludedRootNames -notcontains $_.Name -and $_.Name -ne 'DeploymentBundle'
+} | ForEach-Object {
+    $destinationPath = Join-Path $packageContentPath $_.Name
+    Copy-Item -LiteralPath $_.FullName -Destination $destinationPath -Recurse -Force
+}
+
+$bundleDeploymentPath = Join-Path $packageContentPath 'DeploymentBundle'
+New-Item -ItemType Directory -Path $bundleDeploymentPath -Force | Out-Null
+
+$deploymentSupportItems = @(
+    'TheCertMasterCorporateDB.bak',
+    'DEPLOY_IIS_PRODUCTION.md',
+    'Deploy-IISProduction.ps1',
+    'Get-IISServerInventory.ps1',
+    'key.txt'
+)
+
+foreach ($item in $deploymentSupportItems) {
+    $sourcePath = Join-Path (Join-Path $repoRoot 'DeploymentBundle') $item
     if (-not (Test-Path -LiteralPath $sourcePath)) {
         continue
     }
 
-    $destinationPath = Join-Path $publishPath $item
-    if (Test-Path -LiteralPath $destinationPath) {
-        Remove-Item -LiteralPath $destinationPath -Recurse -Force
-    }
-
+    $destinationPath = Join-Path $bundleDeploymentPath $item
     Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Recurse -Force
 }
 
@@ -117,13 +137,6 @@ Write-Step "Creating deployment zip"
 if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
-
-if (Test-Path $packageRootPath) {
-    Remove-Item -LiteralPath $packageRootPath -Recurse -Force
-}
-
-New-Item -ItemType Directory -Path $packageContentPath -Force | Out-Null
-Copy-Item -Path (Join-Path $publishPath "*") -Destination $packageContentPath -Recurse -Force
 
 Compress-Archive -Path $packageContentPath -DestinationPath $zipPath -CompressionLevel Optimal
 
