@@ -51,10 +51,16 @@ if (-not (Test-Path $projectFullPath)) {
     throw "Project path not found: $projectFullPath"
 }
 
+$bundleDate = Get-Date -Format "yyyyMMdd"
+$bundleSequence = 1
+do {
+    $zipName = "TheCertMaster-CustomQuizs-release-bundle-{0}_{1:D3}.zip" -f $bundleDate, $bundleSequence
+    $zipPath = Join-Path $bundleRootFullPath $zipName
+    $bundleSequence++
+} while (Test-Path -LiteralPath $zipPath)
+
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $publishPath = Join-Path $publishRootFullPath $timestamp
-$zipName = "QuizAPI_IIS_Production_$timestamp.zip"
-$zipPath = Join-Path $bundleRootFullPath $zipName
 
 New-Item -ItemType Directory -Path $publishRootFullPath -Force | Out-Null
 New-Item -ItemType Directory -Path $bundleRootFullPath -Force | Out-Null

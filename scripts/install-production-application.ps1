@@ -540,7 +540,8 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Publish script failed.'
 }
 
-$deploymentZip = Get-ChildItem -Path (Join-Path $sourceRoot 'DeploymentBundle') -Filter 'QuizAPI_IIS_Production_*.zip' |
+$deploymentZip = Get-ChildItem -Path (Join-Path $sourceRoot 'DeploymentBundle') -File |
+    Where-Object { $_.Name -like 'TheCertMaster-CustomQuizs-release-bundle-*.zip' -or $_.Name -like 'QuizAPI_IIS_Production_*.zip' } |
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 
