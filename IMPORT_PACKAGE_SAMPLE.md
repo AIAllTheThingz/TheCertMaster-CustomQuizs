@@ -4,7 +4,7 @@ This repository includes a minimal end-to-end sample package under [Samples\Impo
 
 Files:
 - `quiz.csv`
-- `forklift-safety.svg`
+- `forklift-safety.png`
 
 The sample CSV demonstrates:
 - required columns: `QuizTitle`, `QuestionText`, `AnswerText`, `IsCorrect`
@@ -12,9 +12,11 @@ The sample CSV demonstrates:
 - a question with an attached image using `QuestionImgKey=forklift-safety`
 
 `QuestionImgKey` matching rules in the current importer:
-- it may be the exact file name, like `forklift-safety.svg`
+- it may be the exact file name, like `forklift-safety.png`
 - it may be the basename without extension, like `forklift-safety`
 - it may contain multiple image keys separated by `|`, `;`, or `,`
+
+Supported package image types are PNG, JPG/JPEG, GIF, and WebP. SVG files are rejected because uploaded SVG can execute as same-origin script in some browser paths. The importer also enforces package size, entry count, total uncompressed size, image count, per-image size, and image file-signature checks before extracting anything under `wwwroot/uploads`.
 
 ## Build The Sample ZIP
 

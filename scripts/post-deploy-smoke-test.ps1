@@ -3,11 +3,23 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl = 'http://WIN2K22IIS01',
-    [string]$AdminEmail = 'admin@quizapi.local',
-    [string]$AdminPassword = 'Admin@123'
+    [string]$AdminEmail = '',
+    [string]$AdminPassword = '',
+    [switch]$SkipQuizCatalogCheck,
+    [switch]$RunBrowserSmokeTest,
+    [string]$NodePath = 'node',
+    [string]$BrowserPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($AdminEmail)) {
+    throw 'AdminEmail is required. Pass the bootstrap admin email you configured for this deployment.'
+}
+
+if ([string]::IsNullOrWhiteSpace($AdminPassword)) {
+    throw 'AdminPassword is required. Pass the non-default bootstrap admin password configured for this deployment.'
+}
 
 function Write-Step {
     param([string]$Message)
@@ -173,16 +185,48 @@ if ([string]::IsNullOrWhiteSpace($loginResponse.token)) {
     throw 'Admin login did not return a JWT token.'
 }
 
-Write-Step 'Checking quiz catalog'
-$quizHeaders = @{ Authorization = 'Bearer ' + $loginResponse.token }
-if ($null -ne $requestHeaders -and $requestHeaders.ContainsKey('Host')) {
-    $quizHeaders['Host'] = $requestHeaders['Host']
+if ($SkipQuizCatalogCheck) {
+    Write-Step 'Checking quiz catalog'
+    Write-Host 'Quiz catalog check skipped for migration-only install.' -ForegroundColor Yellow
 }
-$quizResponse = Invoke-ApiRequest -Uri ($normalizedBaseUrl + '/api/quiz') -Method Get -Headers $quizHeaders
-$quizCount = @($quizResponse).Count
-if ($quizCount -lt 1) {
-    throw 'Quiz catalog check failed. No quizzes were returned after deployment.'
+else {
+    Write-Step 'Checking quiz catalog'
+    $quizHeaders = @{ Authorization = 'Bearer ' + $loginResponse.token }
+    if ($null -ne $requestHeaders -and $requestHeaders.ContainsKey('Host')) {
+        $quizHeaders['Host'] = $requestHeaders['Host']
+    }
+    $quizResponse = Invoke-ApiRequest -Uri ($normalizedBaseUrl + '/api/quiz') -Method Get -Headers $quizHeaders
+    $quizCount = @($quizResponse).Count
+    if ($quizCount -lt 1) {
+        throw 'Quiz catalog check failed. No quizzes were returned after deployment.'
+    }
+
+    Write-Host "Quiz count: $quizCount" -ForegroundColor Green
 }
 
-Write-Host "Quiz count: $quizCount" -ForegroundColor Green
 Write-Host 'Smoke test passed.' -ForegroundColor Green
+
+if ($RunBrowserSmokeTest) {
+    Write-Step 'Running browser UI smoke test'
+
+    $browserSmokeScript = Join-Path $PSScriptRoot 'browser-smoke-test.mjs'
+    if (!(Test-Path -LiteralPath $browserSmokeScript)) {
+        throw "Browser smoke test script not found: $browserSmokeScript"
+    }
+
+    $nodeArgs = @(
+        $browserSmokeScript,
+        "--base-url=$BaseUrl",
+        "--admin-email=$AdminEmail",
+        "--admin-password=$AdminPassword"
+    )
+
+    if (![string]::IsNullOrWhiteSpace($BrowserPath)) {
+        $nodeArgs += "--browser-path=$BrowserPath"
+    }
+
+    & $NodePath @nodeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Browser UI smoke test failed with exit code $LASTEXITCODE."
+    }
+}

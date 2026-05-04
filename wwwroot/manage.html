@@ -248,6 +248,12 @@
             border: 0;
             background: white;
         }
+        .swaggerDisabled {
+            padding: 18px;
+            line-height: 1.55;
+            color: var(--muted);
+            background: white;
+        }
     </style>
 </head>
 <body>
@@ -430,6 +436,11 @@
                     <input type="text" id="preEmploymentTitle" placeholder="Pre-Employment Quiz" style="min-width:260px;" />
                 </div>
                 <div>
+                    <label>Optional access code / link token</label><br />
+                    <input type="text" id="preEmploymentAccessCode" placeholder="Leave blank for public access" style="min-width:260px;" autocomplete="off" />
+                    <div class="muted">If set, candidates must enter this code or use `/preemployment.html?code=...`.</div>
+                </div>
+                <div>
                     <label>Source exam titles</label><br />
                     <select id="preEmploymentQuizSelect" multiple required size="7" style="min-width:320px; min-height:220px;">
                     </select>
@@ -513,6 +524,7 @@ const loginForm = document.getElementById("loginForm");
         const userSearch = document.getElementById("userSearch");
         const preEmploymentForm = document.getElementById("preEmploymentForm");
         const preEmploymentTitle = document.getElementById("preEmploymentTitle");
+        const preEmploymentAccessCode = document.getElementById("preEmploymentAccessCode");
         const preEmploymentQuizSelect = document.getElementById("preEmploymentQuizSelect");
         const preEmploymentQuestionCount = document.getElementById("preEmploymentQuestionCount");
         const preEmploymentTimeLimit = document.getElementById("preEmploymentTimeLimit");
@@ -535,6 +547,10 @@ const loginForm = document.getElementById("loginForm");
         const refreshSystemStatusBtn = document.getElementById("refreshSystemStatusBtn");
         const systemStatusMessage = document.getElementById("systemStatusMessage");
         const systemStatusGrid = document.getElementById("systemStatusGrid");
+        const swaggerStatusMessage = document.getElementById("swaggerStatusMessage");
+        const swaggerFrame = document.getElementById("swaggerFrame");
+        const swaggerOpenLink = document.getElementById("swaggerOpenLink");
+        const swaggerDisabledMessage = document.getElementById("swaggerDisabledMessage");
 
         function setBannerStatus(el, tone, message) {
             if (!el) return;
@@ -981,6 +997,37 @@ const loginForm = document.getElementById("loginForm");
                 </div>
             `).join("");
             systemStatusGrid.style.display = "grid";
+            renderSwaggerReference(data);
+        }
+
+        function renderSwaggerReference(data) {
+            const swaggerEnabled = !!data?.swaggerEnabled;
+            const swaggerUrl = data?.swaggerUrl || "/swagger";
+            if (swaggerOpenLink) {
+                swaggerOpenLink.href = swaggerUrl;
+                swaggerOpenLink.style.display = swaggerEnabled ? "inline-flex" : "none";
+            }
+            if (swaggerFrame) {
+                if (swaggerEnabled) {
+                    swaggerFrame.src = swaggerUrl;
+                    swaggerFrame.style.display = "block";
+                } else {
+                    swaggerFrame.removeAttribute("src");
+                    swaggerFrame.style.display = "none";
+                }
+            }
+            if (swaggerDisabledMessage) {
+                swaggerDisabledMessage.style.display = swaggerEnabled ? "none" : "block";
+            }
+            if (swaggerStatusMessage) {
+                setSectionStatus(
+                    swaggerStatusMessage,
+                    swaggerEnabled ? "warn" : "ok",
+                    swaggerEnabled
+                        ? "Swagger is enabled. Turn it off after diagnostics are complete."
+                        : "Swagger is disabled for this environment. This avoids broken production embeds and keeps API docs unavailable unless explicitly enabled."
+                );
+            }
         }
 
         async function loadSystemStatus() {
@@ -1977,6 +2024,7 @@ async function loadPreEmploymentConfig() {
 
         const cfg = await ApiJson.readJsonNormalized(res);
         preEmploymentTitle.value = cfg.title || "Pre-Employment Quiz";
+        if (preEmploymentAccessCode) preEmploymentAccessCode.value = cfg.accessCode || "";
         preEmploymentQuestionCount.value = cfg.questionCount || 20;
         preEmploymentTimeLimit.value = cfg.timeLimitMinutes || 0;
         preEmploymentPassingScore.value = cfg.passingScorePercent ?? 70;
@@ -2016,6 +2064,7 @@ async function savePreEmploymentConfig() {
 
     const payload = {
         title: (preEmploymentTitle.value || "").trim(),
+        accessCode: preEmploymentAccessCode ? (preEmploymentAccessCode.value || "").trim() : "",
         quizIds,
         questionCount: parseInt(preEmploymentQuestionCount.value || "0", 10),
         timeLimitMinutes: parseInt(preEmploymentTimeLimit.value || "0", 10),
@@ -2815,9 +2864,13 @@ document.addEventListener("DOMContentLoaded", () => {
     <div class="swaggerWrap">
         <div class="swaggerHead">
             <strong>Swagger Reference</strong>
-            <a class="app-link" href="/swagger/index.html" target="_blank" rel="noreferrer">Open Swagger In New Tab</a>
+            <a class="app-link" id="swaggerOpenLink" href="/swagger" target="_blank" rel="noreferrer" style="display:none;">Open Swagger In New Tab</a>
         </div>
-        <iframe class="swaggerFrame" src="/swagger/index.html" title="Swagger UI"></iframe>
+        <div id="swaggerStatusMessage" class="statusBanner" style="display:none; margin:12px 18px;"></div>
+        <div id="swaggerDisabledMessage" class="swaggerDisabled">
+            Swagger is currently disabled for this environment. Set <code>Swagger__Enabled=true</code> temporarily and restart the app pool to enable it for diagnostics.
+        </div>
+        <iframe class="swaggerFrame" id="swaggerFrame" title="Swagger UI" style="display:none;"></iframe>
     </div>
 </div>
 </div>

@@ -9,6 +9,9 @@ namespace QuizAPI.Controllers
     [Route("api/import")]
     public class ImportController : ControllerBase
     {
+        private const long MaxCsvUploadBytes = 25L * 1024 * 1024;
+        private const long MaxPackageUploadBytes = 50L * 1024 * 1024;
+
         private readonly QuizImportService _import;
 
         public ImportController(QuizImportService import) => _import = import;
@@ -16,6 +19,8 @@ namespace QuizAPI.Controllers
         [Authorize(Roles = "Admin")]
         [HttpPost("upload")]
         [Consumes("multipart/form-data")]
+        [RequestSizeLimit(MaxCsvUploadBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxCsvUploadBytes)]
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         public async Task<IActionResult> Upload([FromForm] FileUploadModel model)
         {
@@ -36,6 +41,8 @@ namespace QuizAPI.Controllers
         [Authorize(Roles = "Admin")]
         [HttpPost("upload-package")]
         [Consumes("multipart/form-data")]
+        [RequestSizeLimit(MaxPackageUploadBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxPackageUploadBytes)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<IActionResult> UploadPackage([FromForm] FileUploadModel model)
         {
@@ -50,6 +57,10 @@ namespace QuizAPI.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(BuildImportErrorMessage(ex.Message, ImportAction.UploadPackage));
+            }
+            catch (InvalidDataException)
+            {
+                return BadRequest(BuildImportErrorMessage("Package could not be read as a valid ZIP file.", ImportAction.UploadPackage));
             }
         }
 

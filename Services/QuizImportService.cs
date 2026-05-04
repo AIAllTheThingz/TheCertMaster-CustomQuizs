@@ -11,6 +11,13 @@ namespace QuizAPI.Services
 {
     public class QuizImportService
     {
+        private const long MaxCsvUploadBytes = 25L * 1024 * 1024;
+        private const long MaxPackageUploadBytes = 50L * 1024 * 1024;
+        private const long MaxPackageUncompressedBytes = 150L * 1024 * 1024;
+        private const long MaxImageEntryBytes = 10L * 1024 * 1024;
+        private const int MaxPackageEntries = 250;
+        private const int MaxPackageImages = 200;
+
         private readonly IWebHostEnvironment _env;
         private readonly QuizDbContext _db;
 
@@ -104,6 +111,9 @@ namespace QuizAPI.Services
             if (file == null || file.Length == 0)
                 throw new InvalidOperationException("No file received.");
 
+            if (file.Length > MaxCsvUploadBytes)
+                throw new InvalidOperationException($"CSV upload may not exceed {FormatBytes(MaxCsvUploadBytes)}.");
+
             var uploadsRoot = GetPrivateUploadsRoot();
             Directory.CreateDirectory(uploadsRoot);
 
@@ -125,6 +135,9 @@ namespace QuizAPI.Services
             if (!safeName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Package upload must be a .zip file.");
 
+            if (file.Length > MaxPackageUploadBytes)
+                throw new InvalidOperationException($"Package upload may not exceed {FormatBytes(MaxPackageUploadBytes)}.");
+
             var privateUploadsRoot = GetPrivateUploadsRoot();
             Directory.CreateDirectory(privateUploadsRoot);
 
@@ -145,14 +158,41 @@ namespace QuizAPI.Services
             using (var zipStream = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: false))
             {
-                var csvEntries = archive.Entries
-                    .Where(e => !string.IsNullOrWhiteSpace(e.Name) && e.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                var fileEntries = archive.Entries
+                    .Where(e => !string.IsNullOrWhiteSpace(e.Name))
+                    .ToList();
+
+                if (fileEntries.Count > MaxPackageEntries)
+                    throw new InvalidOperationException($"Package may not contain more than {MaxPackageEntries} files.");
+
+                var totalUncompressedBytes = 0L;
+                foreach (var entry in fileEntries)
+                {
+                    if (entry.Length < 0)
+                        throw new InvalidOperationException($"Package entry \"{entry.FullName}\" has an invalid size.");
+
+                    if (entry.Length > MaxPackageUncompressedBytes
+                        || totalUncompressedBytes > MaxPackageUncompressedBytes - entry.Length)
+                        throw new InvalidOperationException($"Package uncompressed content may not exceed {FormatBytes(MaxPackageUncompressedBytes)}.");
+
+                    totalUncompressedBytes += entry.Length;
+
+                    var ext = Path.GetExtension(entry.Name);
+                    if (IsRejectedImageExtension(ext))
+                        throw new InvalidOperationException("SVG images are not accepted in quiz packages. Use PNG, JPG, GIF, or WebP.");
+                }
+
+                var csvEntries = fileEntries
+                    .Where(e => e.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 if (csvEntries.Count != 1)
                     throw new InvalidOperationException("Package must contain exactly one .csv file.");
 
                 var csvEntry = csvEntries[0];
+                if (csvEntry.Length > MaxCsvUploadBytes)
+                    throw new InvalidOperationException($"Package CSV may not exceed {FormatBytes(MaxCsvUploadBytes)}.");
+
                 csvEntryName = csvEntry.Name;
                 csvSavedFileName = $"{packageId}_{Path.GetFileName(csvEntry.Name)}";
                 var csvOutPath = Path.Combine(privateUploadsRoot, csvSavedFileName);
@@ -161,11 +201,8 @@ namespace QuizAPI.Services
                 using (var outStream = new FileStream(csvOutPath, FileMode.Create, FileAccess.Write))
                     await inStream.CopyToAsync(outStream);
 
-                foreach (var entry in archive.Entries)
+                foreach (var entry in fileEntries)
                 {
-                    if (string.IsNullOrWhiteSpace(entry.Name))
-                        continue;
-
                     var ext = Path.GetExtension(entry.Name);
                     if (string.IsNullOrWhiteSpace(ext))
                         continue;
@@ -177,12 +214,19 @@ namespace QuizAPI.Services
                     if (string.IsNullOrWhiteSpace(fileNameOnly))
                         continue;
 
+                    if (entry.Length > MaxImageEntryBytes)
+                        throw new InvalidOperationException($"Image \"{fileNameOnly}\" may not exceed {FormatBytes(MaxImageEntryBytes)}.");
+
+                    if (imagesSaved >= MaxPackageImages)
+                        throw new InvalidOperationException($"Package may not contain more than {MaxPackageImages} images.");
+
+                    var imageBytes = await ReadEntryBytesAsync(entry, MaxImageEntryBytes);
+                    ValidateImageBytes(fileNameOnly, ext, imageBytes);
+
                     var outFileName = EnsureUniqueFileName(imagesDir, fileNameOnly);
                     var outPath = Path.Combine(imagesDir, outFileName);
 
-                    using (var inStream = entry.Open())
-                    using (var outStream = new FileStream(outPath, FileMode.Create, FileAccess.Write))
-                        await inStream.CopyToAsync(outStream);
+                    await File.WriteAllBytesAsync(outPath, imageBytes);
 
                     imagesSaved++;
                 }
@@ -205,8 +249,82 @@ namespace QuizAPI.Services
                 || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
                 || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
                 || ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
-                || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)
-                || ext.Equals(".svg", StringComparison.OrdinalIgnoreCase);
+                || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsRejectedImageExtension(string? ext)
+        {
+            return string.Equals(ext, ".svg", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static async Task<byte[]> ReadEntryBytesAsync(ZipArchiveEntry entry, long maxBytes)
+        {
+            await using var inStream = entry.Open();
+            using var memory = new MemoryStream();
+            var buffer = new byte[81920];
+            long total = 0;
+
+            while (true)
+            {
+                var read = await inStream.ReadAsync(buffer.AsMemory(0, buffer.Length));
+                if (read == 0)
+                    break;
+
+                total += read;
+                if (total > maxBytes)
+                    throw new InvalidOperationException($"Package entry \"{entry.Name}\" exceeded the allowed size while reading.");
+
+                memory.Write(buffer, 0, read);
+            }
+
+            return memory.ToArray();
+        }
+
+        private static void ValidateImageBytes(string fileName, string ext, byte[] bytes)
+        {
+            var valid = ext.ToLowerInvariant() switch
+            {
+                ".png" => bytes.Length >= 8
+                    && bytes[0] == 0x89
+                    && bytes[1] == 0x50
+                    && bytes[2] == 0x4E
+                    && bytes[3] == 0x47
+                    && bytes[4] == 0x0D
+                    && bytes[5] == 0x0A
+                    && bytes[6] == 0x1A
+                    && bytes[7] == 0x0A,
+                ".jpg" or ".jpeg" => bytes.Length >= 3
+                    && bytes[0] == 0xFF
+                    && bytes[1] == 0xD8
+                    && bytes[2] == 0xFF,
+                ".gif" => bytes.Length >= 6
+                    && bytes[0] == 0x47
+                    && bytes[1] == 0x49
+                    && bytes[2] == 0x46
+                    && bytes[3] == 0x38
+                    && (bytes[4] == 0x37 || bytes[4] == 0x39)
+                    && bytes[5] == 0x61,
+                ".webp" => bytes.Length >= 12
+                    && bytes[0] == 0x52
+                    && bytes[1] == 0x49
+                    && bytes[2] == 0x46
+                    && bytes[3] == 0x46
+                    && bytes[8] == 0x57
+                    && bytes[9] == 0x45
+                    && bytes[10] == 0x42
+                    && bytes[11] == 0x50,
+                _ => false
+            };
+
+            if (!valid)
+                throw new InvalidOperationException($"Image \"{fileName}\" does not match its file type.");
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            return bytes >= 1024 * 1024
+                ? $"{bytes / (1024 * 1024)} MB"
+                : $"{bytes} bytes";
         }
 
         private static string EnsureUniqueFileName(string directory, string desiredFileName)
@@ -630,7 +748,6 @@ namespace QuizAPI.Services
                 ".jpeg" => "image/jpeg",
                 ".gif" => "image/gif",
                 ".webp" => "image/webp",
-                ".svg" => "image/svg+xml",
                 _ => "application/octet-stream"
             };
         }

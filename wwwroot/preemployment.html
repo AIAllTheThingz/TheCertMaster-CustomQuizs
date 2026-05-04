@@ -182,6 +182,10 @@
                     <label for="lastName">Last Name</label><br />
                     <input id="lastName" type="text" placeholder="Last name" />
                 </div>
+                <div id="accessCodeWrap" style="display:none;">
+                    <label for="accessCode">Access Code</label><br />
+                    <input id="accessCode" type="text" placeholder="Access code" autocomplete="off" />
+                </div>
             </div>
 
             <div class="row" style="margin-top: 12px;">
@@ -246,6 +250,8 @@
         const sourceQuizLine = el('sourceQuizLine');
         const firstName = el('firstName');
         const lastName = el('lastName');
+        const accessCodeWrap = el('accessCodeWrap');
+        const accessCode = el('accessCode');
 
         const btnStart = el('btnStart');
 
@@ -288,7 +294,8 @@
             timeLimitMinutes: 0,
             passingScorePercent: 70,
             randomizeAnswers: true,
-            showCorrectAnswersAtEnd: false
+            showCorrectAnswersAtEnd: false,
+            accessCodeRequired: false
         };
 
         let quizDto = null;
@@ -406,7 +413,8 @@
             return {
                 Answers: answers,
                 FirstName: firstName.value.trim(),
-                LastName: lastName.value.trim()
+                LastName: lastName.value.trim(),
+                AccessCode: accessCode.value.trim()
             };
         }
 
@@ -429,13 +437,19 @@
                 return;
             }
 
+            if (config.accessCodeRequired && !accessCode.value.trim()) {
+                setStatus('Enter the access code before starting the test.');
+                return;
+            }
+
             const desired = Math.min(Number(config.questionCount || 20), Number(config.maxQuestionCount || 20));
 
             try {
                 const res = await api.generate({
                     QuizIds: selectedQuizIds,
                     QuestionCount: desired,
-                    Title: config.title
+                    Title: config.title,
+                    AccessCode: accessCode.value.trim()
                 });
 
                 quizDto = res;
@@ -514,6 +528,12 @@
 
             pageTitle.textContent = config.title || 'Pre-Employment Quiz';
             document.title = pageTitle.textContent;
+            const urlParams = new URLSearchParams(window.location.search);
+            const linkCode = urlParams.get('code') || urlParams.get('accessCode') || '';
+            if (linkCode && !accessCode.value) {
+                accessCode.value = linkCode;
+            }
+            accessCodeWrap.style.display = config.accessCodeRequired ? 'block' : 'none';
 
             const desired = Math.min(Number(config.questionCount || 20), Number(config.maxQuestionCount || 20));
             const selectedTitles = Array.isArray(config.quizTitles) && config.quizTitles.length

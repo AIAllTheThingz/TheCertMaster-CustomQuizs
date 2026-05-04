@@ -69,6 +69,7 @@ if (OperatingSystem.IsWindows())
 // Controllers & JSON
 builder.Services.AddControllers()
     .AddJsonOptions(o => { o.JsonSerializerOptions.PropertyNamingPolicy = null; });
+builder.Services.AddMemoryCache();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -153,6 +154,10 @@ builder.Services.AddRateLimiter(options =>
     var authRegisterPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:RegisterPermitLimit") ?? 10, 1, 5000);
     var authLoginPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:LoginPermitLimit") ?? 25, 1, 5000);
     var authLoopbackPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:Auth:LoopbackPermitLimit") ?? 200, 1, 10000);
+    var preEmploymentWindowMinutes = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:PreEmployment:WindowMinutes") ?? 5, 1, 60);
+    var preEmploymentGeneratePermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:PreEmployment:GeneratePermitLimit") ?? 30, 1, 5000);
+    var preEmploymentSubmitPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:PreEmployment:SubmitPermitLimit") ?? 10, 1, 5000);
+    var preEmploymentLoopbackPermitLimit = Math.Clamp(builder.Configuration.GetValue<int?>("RateLimiting:PreEmployment:LoopbackPermitLimit") ?? 200, 1, 10000);
 
     options.AddPolicy("AuthRegisterPolicy", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -177,6 +182,34 @@ builder.Services.AddRateLimiter(options =>
                     ? authLoopbackPermitLimit
                     : authLoginPermitLimit,
                 Window = TimeSpan.FromMinutes(authWindowMinutes),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy("PreEmploymentGeneratePolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"preemployment-generate:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = httpContext.Connection.RemoteIpAddress is { } remoteIp && IPAddress.IsLoopback(remoteIp)
+                    ? preEmploymentLoopbackPermitLimit
+                    : preEmploymentGeneratePermitLimit,
+                Window = TimeSpan.FromMinutes(preEmploymentWindowMinutes),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy("PreEmploymentSubmitPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"preemployment-submit:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = httpContext.Connection.RemoteIpAddress is { } remoteIp && IPAddress.IsLoopback(remoteIp)
+                    ? preEmploymentLoopbackPermitLimit
+                    : preEmploymentSubmitPermitLimit,
+                Window = TimeSpan.FromMinutes(preEmploymentWindowMinutes),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 AutoReplenishment = true
@@ -327,12 +360,19 @@ using (var scope = app.Services.CreateScope())
     var bootstrapAdminPassword = app.Configuration["BootstrapAdmin:Password"];
     var bootstrapAdminFirstName = app.Configuration["BootstrapAdmin:FirstName"]?.Trim();
     var bootstrapAdminLastName = app.Configuration["BootstrapAdmin:LastName"]?.Trim();
+    const string packagedSeedAdminEmail = "admin@quizapi.local";
+    const string packagedSeedAdminPassword = "Admin@123";
 
     if (!string.IsNullOrWhiteSpace(bootstrapAdminEmail))
     {
         if (string.IsNullOrWhiteSpace(bootstrapAdminPassword))
         {
             throw new InvalidOperationException("BootstrapAdmin:Password is required when BootstrapAdmin:Email is configured.");
+        }
+
+        if (string.Equals(bootstrapAdminPassword, packagedSeedAdminPassword, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("BootstrapAdmin:Password cannot use the packaged default password. Set a new password before starting the application.");
         }
 
         var bootstrapAdmin = await userManager.FindByEmailAsync(bootstrapAdminEmail);
@@ -383,6 +423,30 @@ using (var scope = app.Services.CreateScope())
                 {
                     throw new InvalidOperationException("Failed to update bootstrap admin user: " +
                         string.Join("; ", updateResult.Errors.Select(e => e.Description)));
+                }
+            }
+
+            var bootstrapAdminHasPassword = await userManager.HasPasswordAsync(bootstrapAdmin);
+            var isPackagedSeedAdmin = string.Equals(bootstrapAdminEmail, packagedSeedAdminEmail, StringComparison.OrdinalIgnoreCase);
+
+            if (!bootstrapAdminHasPassword)
+            {
+                var addPasswordResult = await userManager.AddPasswordAsync(bootstrapAdmin, bootstrapAdminPassword);
+                if (!addPasswordResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Failed to add bootstrap admin password: " +
+                        string.Join("; ", addPasswordResult.Errors.Select(e => e.Description)));
+                }
+            }
+            else if (isPackagedSeedAdmin
+                && !await userManager.CheckPasswordAsync(bootstrapAdmin, bootstrapAdminPassword))
+            {
+                var resetToken = await userManager.GeneratePasswordResetTokenAsync(bootstrapAdmin);
+                var resetPasswordResult = await userManager.ResetPasswordAsync(bootstrapAdmin, resetToken, bootstrapAdminPassword);
+                if (!resetPasswordResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Failed to rotate the packaged seeded admin password to the configured bootstrap password: " +
+                        string.Join("; ", resetPasswordResult.Errors.Select(e => e.Description)));
                 }
             }
         }

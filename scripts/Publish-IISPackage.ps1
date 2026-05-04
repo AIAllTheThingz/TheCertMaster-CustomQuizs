@@ -3,6 +3,7 @@ param(
     [string]$Configuration = "Release",
     [string]$SolutionPath = ".\QuizAPI.sln",
     [string]$ProjectPath = ".\QuizAPI.csproj",
+    [string]$TestProjectPath = ".\QuizAPI.Tests\QuizAPI.Tests.csproj",
     [string]$PublishRoot = ".\publish",
     [string]$BundleRoot = ".\DeploymentBundle",
     [switch]$SkipTests
@@ -28,17 +29,26 @@ function Resolve-AbsolutePath {
     return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
 }
 
+function Invoke-NativeCommand {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 $projectFullPath = Resolve-AbsolutePath -Path $ProjectPath
 $solutionFullPath = Resolve-AbsolutePath -Path $SolutionPath
+$testProjectFullPath = Resolve-AbsolutePath -Path $TestProjectPath
 $publishRootFullPath = Resolve-AbsolutePath -Path $PublishRoot
 $bundleRootFullPath = Resolve-AbsolutePath -Path $BundleRoot
 
 if (-not (Test-Path $projectFullPath)) {
     throw "Project path not found: $projectFullPath"
-}
-
-if (-not (Test-Path $solutionFullPath)) {
-    throw "Solution path not found: $solutionFullPath"
 }
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
@@ -50,14 +60,18 @@ New-Item -ItemType Directory -Path $publishRootFullPath -Force | Out-Null
 New-Item -ItemType Directory -Path $bundleRootFullPath -Force | Out-Null
 
 Write-Step "Restoring packages"
-dotnet restore $solutionFullPath
+Invoke-NativeCommand -FilePath "dotnet" -Arguments @("restore", $projectFullPath)
 
-Write-Step "Building solution"
-dotnet build $solutionFullPath -c $Configuration --no-restore
+Write-Step "Building application project"
+Invoke-NativeCommand -FilePath "dotnet" -Arguments @("build", $projectFullPath, "-c", $Configuration, "--no-restore")
 
-if (-not $SkipTests) {
+if (-not $SkipTests -and (Test-Path $testProjectFullPath)) {
     Write-Step "Running tests"
-    dotnet test $solutionFullPath -c $Configuration --no-build
+    Invoke-NativeCommand -FilePath "dotnet" -Arguments @("test", $testProjectFullPath, "-c", $Configuration)
+}
+elseif (-not $SkipTests) {
+    Write-Step "Skipping tests"
+    Write-Host "Test project not found: $testProjectFullPath"
 }
 
 Write-Step "Publishing IIS package contents"
@@ -65,7 +79,7 @@ if (Test-Path $publishPath) {
     Remove-Item -LiteralPath $publishPath -Recurse -Force
 }
 
-dotnet publish $projectFullPath -c $Configuration --no-build -o $publishPath
+Invoke-NativeCommand -FilePath "dotnet" -Arguments @("publish", $projectFullPath, "-c", $Configuration, "--no-build", "-o", $publishPath)
 
 Write-Step "Creating deployment zip"
 if (Test-Path $zipPath) {

@@ -152,6 +152,9 @@ namespace QuizAPI.Controllers
             if (!string.Equals(normalizedImageKey, (request.QuestionImgKey ?? string.Empty).Trim(), StringComparison.Ordinal))
                 return BadRequest("QuestionImgKey must be a file name only.");
 
+            if (string.Equals(Path.GetExtension(normalizedImageKey), ".svg", StringComparison.OrdinalIgnoreCase))
+                return BadRequest("SVG images are not supported. Use PNG, JPG, GIF, or WebP.");
+
             SyncQuestionImage(question, normalizedImageKey);
 
             await _db.SaveChangesAsync();
@@ -233,7 +236,6 @@ namespace QuizAPI.Controllers
                 ".png" => "image/png",
                 ".gif" => "image/gif",
                 ".bmp" => "image/bmp",
-                ".svg" => "image/svg+xml",
                 ".webp" => "image/webp",
                 _ => "application/octet-stream"
             };

@@ -116,7 +116,7 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 - Purpose: Controls whether the installer restores the repository seed database before applying migrations.
 - Typical value: `$true`
 - Required: Optional
-- Notes: Leave this enabled for standard packaged installs so quizzes and baseline content are present after deployment.
+- Notes: Leave this enabled for standard packaged installs so quizzes and baseline content are present after deployment. If you disable it, the install becomes migration-only and the smoke test skips the quiz-count assertion.
 
 `DatabaseBackupPath`
 - Purpose: Path to the bundled seed backup used during install.
@@ -134,12 +134,12 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 `BootstrapAdminEmail`
 - Purpose: Fallback local administrator account email.
 - Required: Optional but strongly recommended
-- Notes: The packaged seed database already includes `admin@quizapi.local`. The standard packaged install template now ships with that value prefilled.
+- Notes: The packaged seed database already includes `admin@quizapi.local`, and the standard packaged install template keeps that value prefilled.
 
 `BootstrapAdminPassword`
 - Purpose: Fallback local administrator account password.
-- Required: Optional but strongly recommended
-- Notes: The standard packaged install template now ships with `Admin@123` for the seeded admin account. Change this password immediately after the first successful login in any real environment.
+- Required: Yes for packaged installs
+- Notes: Leave this blank to let the installer generate a strong temporary install/configuration password and print it in the install summary. You can also set it explicitly. The installer rejects the packaged default password, and the application rotates the packaged seeded admin account to the configured bootstrap password whenever that seeded admin is out of sync with it.
 
 `BootstrapAdminFirstName`
 - Purpose: Display/profile first name for the fallback admin.
@@ -153,12 +153,15 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 
 ### Seeded admin behavior
 
-When `RestoreSeedDatabase = $true`, the packaged database already contains a default local administrator account:
+When `RestoreSeedDatabase = $true`, the packaged database already contains a local administrator account:
 
 - Email: `admin@quizapi.local`
-- Password: `Admin@123`
 
-If you change `BootstrapAdminEmail` to something else, the installer will still try to let the application create that account during startup. If that account does not appear immediately after deployment but the seeded admin exists, the installer now falls back to validating the seeded admin instead of failing the whole install.
+Leave `BootstrapAdminPassword` blank to let the installer generate a strong temporary install/configuration password, or set it explicitly if your rollout requires that. During startup, the app rotates the packaged seeded admin account to the configured bootstrap password whenever the seeded admin is out of sync with it.
+
+After installation and configuration are complete, change the `admin@quizapi.local` password again to a final long-term credential.
+
+If you change `BootstrapAdminEmail` to something else, the installer will try to let the application create that account during startup. If that requested account does not appear after deployment, the install fails instead of silently falling back to the seeded admin.
 
 ## LDAP / Active Directory settings
 
@@ -216,6 +219,19 @@ If you change `BootstrapAdminEmail` to something else, the installer will still 
 - Required: Optional
 - Notes: Recommended for normal installs so the script verifies health, login, and quiz availability before finishing.
 
+## Runtime hardening settings
+
+Anonymous pre-employment quiz generation and submission are rate-limited by remote IP. The production defaults live in `appsettings.Production.json` under `RateLimiting:PreEmployment`:
+
+- `GeneratePermitLimit`: generation requests allowed per window.
+- `SubmitPermitLimit`: submission requests allowed per window.
+- `LoopbackPermitLimit`: higher local-server allowance for smoke tests and local validation.
+- `WindowMinutes`: fixed-window length in minutes.
+
+The pre-employment setup screen also supports an optional access code / link token. If it is set, candidates must enter that code or open a link such as `/preemployment.html?code=your-code` before generation/submission succeeds. Anonymous config responses only reveal whether a code is required; they do not return the configured code. Candidate submissions and completion emails also have short duplicate throttles to reduce accidental double-submits and email bursts.
+
+Quiz package uploads are also bounded before extraction. ZIP uploads are limited to 50 MB compressed, 250 files, 150 MB total uncompressed content, 200 images, 25 MB CSV, and 10 MB per image. Supported extracted image types are PNG, JPG/JPEG, GIF, and WebP; SVG is rejected.
+
 ## Recommended minimum values for a standard HTTP rollout
 
 For a simple internal/server validation install, the most important values are:
@@ -229,9 +245,9 @@ For a simple internal/server validation install, the most important values are:
     RestoreSeedDatabase = $true
     DatabaseBackupPath = 'DeploymentBundle\TheCertMasterCorporateDB.bak'
     BootstrapAdminEmail = 'admin@quizapi.local'
-    BootstrapAdminPassword = 'Admin@123'
+    BootstrapAdminPassword = ''
     EnableSmokeTest = $true
 }
 ```
 
-Everything else can usually stay at the default until you need host-header bindings, HTTPS, or LDAP. After the first successful login, change the default seeded admin password immediately.
+Everything else can usually stay at the default until you need host-header bindings, HTTPS, or LDAP.

@@ -137,6 +137,72 @@ function New-RandomJwtKey {
     return [Convert]::ToBase64String($bytes)
 }
 
+function New-RandomBootstrapAdminPassword {
+    $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+    $lower = 'abcdefghijkmnopqrstuvwxyz'
+    $digits = '23456789'
+    $symbols = '!@$%&*-_=+?'
+    $allCharacters = ($upper + $lower + $digits + $symbols).ToCharArray()
+
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    function Get-CryptoRandomIndex {
+        param(
+            [System.Security.Cryptography.RandomNumberGenerator]$Generator,
+            [int]$ExclusiveMaximum
+        )
+
+        if ($ExclusiveMaximum -le 0) {
+            throw 'ExclusiveMaximum must be greater than zero.'
+        }
+
+        $buffer = New-Object byte[] 4
+        $maximum = [uint32]::MaxValue
+        $limit = $maximum - ($maximum % [uint32]$ExclusiveMaximum)
+
+        do {
+            $Generator.GetBytes($buffer)
+            $value = [BitConverter]::ToUInt32($buffer, 0)
+        } while ($value -ge $limit)
+
+        return [int]($value % [uint32]$ExclusiveMaximum)
+    }
+
+    $passwordCharacters = New-Object System.Collections.Generic.List[char]
+    try {
+        $requiredCharacters = @(
+            $upper[(Get-CryptoRandomIndex -Generator $rng -ExclusiveMaximum $upper.Length)]
+            $lower[(Get-CryptoRandomIndex -Generator $rng -ExclusiveMaximum $lower.Length)]
+            $digits[(Get-CryptoRandomIndex -Generator $rng -ExclusiveMaximum $digits.Length)]
+            $symbols[(Get-CryptoRandomIndex -Generator $rng -ExclusiveMaximum $symbols.Length)]
+        )
+
+        foreach ($character in $requiredCharacters) {
+            $passwordCharacters.Add([char]$character)
+        }
+
+        while ($passwordCharacters.Count -lt 24) {
+            $passwordCharacters.Add($allCharacters[(Get-CryptoRandomIndex -Generator $rng -ExclusiveMaximum $allCharacters.Length)])
+        }
+
+        for ($i = $passwordCharacters.Count - 1; $i -gt 0; $i--) {
+            $j = Get-CryptoRandomIndex -Generator $rng -ExclusiveMaximum ($i + 1)
+            $temp = $passwordCharacters[$i]
+            $passwordCharacters[$i] = $passwordCharacters[$j]
+            $passwordCharacters[$j] = $temp
+        }
+    }
+    finally {
+        $rng.Dispose()
+    }
+
+    return -join $passwordCharacters
+}
+
+function Test-IsDefaultBootstrapPassword {
+    param([string]$Password)
+    return -not [string]::IsNullOrWhiteSpace($Password) -and $Password -eq 'Admin@123'
+}
+
 function Build-ConnectionString {
     return "Server=$SqlInstance;Database=$DatabaseName;Integrated Security=True;TrustServerCertificate=True;MultipleActiveResultSets=True;"
 }
@@ -367,6 +433,8 @@ function Wait-ForAdminExists {
 }
 
 function Resolve-Inputs {
+    $script:BootstrapAdminPasswordWasGenerated = $false
+
     if ([string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
         $defaultBaseUrl = if ([string]::IsNullOrWhiteSpace($HostName)) { "http://localhost" } else { "${Protocol}://$HostName" }
         $script:PublicBaseUrl = Read-HostWithDefault -Prompt 'Public base URL' -DefaultValue $defaultBaseUrl
@@ -395,14 +463,17 @@ function Resolve-Inputs {
     }
 
     if ([string]::IsNullOrWhiteSpace($BootstrapAdminPassword)) {
-        $script:BootstrapAdminPassword = Read-HostWithDefault -Prompt 'Bootstrap admin password' -DefaultValue 'Admin@123'
+        $script:BootstrapAdminPassword = New-RandomBootstrapAdminPassword
+        $script:BootstrapAdminPasswordWasGenerated = $true
+    }
+
+    if (Test-IsDefaultBootstrapPassword -Password $BootstrapAdminPassword) {
+        throw "BootstrapAdminPassword cannot be the packaged default password. Choose a new password before installing."
     }
 }
 
 Resolve-Inputs
 
-$seedAdminEmail = 'admin@quizapi.local'
-$seedAdminPassword = 'Admin@123'
 $validatedAdminEmail = $BootstrapAdminEmail
 $validatedAdminPassword = $BootstrapAdminPassword
 
@@ -456,8 +527,11 @@ Ensure-AppPoolExists
 Write-Step 'Granting SQL access to the IIS app pool'
 Ensure-AppPoolSqlAccess
 
-if (-not (Test-QuizDataExists)) {
+if ($RestoreSeedDatabase -and -not (Test-QuizDataExists)) {
     throw "No quizzes were found in database '$DatabaseName' after the repository restore and migration steps."
+}
+elseif (-not $RestoreSeedDatabase -and -not (Test-QuizDataExists)) {
+    Write-Warning "No quizzes were found after migration-only install. This is allowed when RestoreSeedDatabase is disabled."
 }
 
 Write-Step 'Building deployment package'
@@ -515,23 +589,12 @@ Ensure-AppPoolSqlAccess
 
 Write-Step 'Verifying bootstrap admin exists in the deployed database'
 if (-not (Wait-ForAdminExists -Email $BootstrapAdminEmail -TimeoutSeconds 60)) {
-    if ($RestoreSeedDatabase -and
-        -not [string]::IsNullOrWhiteSpace($BootstrapAdminEmail) -and
-        -not $BootstrapAdminEmail.Equals($seedAdminEmail, [System.StringComparison]::OrdinalIgnoreCase) -and
-        (Wait-ForAdminExists -Email $seedAdminEmail -TimeoutSeconds 5)) {
-
-        Write-Warning "Bootstrap admin '$BootstrapAdminEmail' was not found after deployment. The restored seed database already contains '$seedAdminEmail'. Continuing with the seeded admin account."
-        $validatedAdminEmail = $seedAdminEmail
-        $validatedAdminPassword = $seedAdminPassword
-    }
-    else {
-        throw "Bootstrap admin '$BootstrapAdminEmail' was not found in database '$DatabaseName' after deployment."
-    }
+    throw "Bootstrap admin '$BootstrapAdminEmail' was not found in database '$DatabaseName' after deployment."
 }
 
 if ($EnableSmokeTest) {
     Write-Step 'Running post-deploy smoke tests'
-    & $smokeTestScript -BaseUrl $PublicBaseUrl -AdminEmail $validatedAdminEmail -AdminPassword $validatedAdminPassword
+    & $smokeTestScript -BaseUrl $PublicBaseUrl -AdminEmail $validatedAdminEmail -AdminPassword $validatedAdminPassword -SkipQuizCatalogCheck:$(-not $RestoreSeedDatabase)
 }
 
 Write-Step 'Installation summary'
@@ -541,6 +604,10 @@ Write-Host "SQL connection: $ConnectionString" -ForegroundColor Green
 Write-Host "Site path: $SitePath" -ForegroundColor Green
 Write-Host "Public base URL: $PublicBaseUrl" -ForegroundColor Green
 Write-Host "Validated admin: $validatedAdminEmail" -ForegroundColor Green
+Write-Host "Bootstrap admin password: $validatedAdminPassword" -ForegroundColor Yellow
+if ($BootstrapAdminPasswordWasGenerated) {
+    Write-Host "Bootstrap admin password was auto-generated for temporary installation/configuration use. Change the admin@quizapi.local password again after setup is complete." -ForegroundColor Yellow
+}
 Write-Host "HTTPS redirection enabled: $EnableHttpsRedirection" -ForegroundColor Green
 Write-Host "Seed database restore enabled: $RestoreSeedDatabase" -ForegroundColor Green
 Write-Host "Seed database backup path: $DatabaseBackupPath" -ForegroundColor Green

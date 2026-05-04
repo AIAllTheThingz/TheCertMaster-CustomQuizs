@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using QuizAPI.Data;
 using QuizAPI.DTO;
 using QuizAPI.Services;
@@ -17,24 +19,29 @@ namespace QuizAPI.Controllers
         private readonly IPreEmploymentConfigStore _configStore;
         private readonly ISmtpSettingsStore _smtpStore;
         private readonly IEmailService _emailService;
+        private readonly IMemoryCache _cache;
         private readonly ILogger<PreEmploymentController> _logger;
         private readonly Random _rng = new();
 
         // Safety limits (can be loosened later)
         private const int DefaultQuestionCount = 20;
         private const int MaxQuestionCount = 100;
+        private static readonly TimeSpan SubmissionThrottleWindow = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan EmailThrottleWindow = TimeSpan.FromMinutes(1);
 
         public PreEmploymentController(
             QuizDbContext db,
             IPreEmploymentConfigStore configStore,
             ISmtpSettingsStore smtpStore,
             IEmailService emailService,
+            IMemoryCache cache,
             ILogger<PreEmploymentController> logger)
         {
             _db = db;
             _configStore = configStore;
             _smtpStore = smtpStore;
             _emailService = emailService;
+            _cache = cache;
             _logger = logger;
         }
 
@@ -76,7 +83,7 @@ namespace QuizAPI.Controllers
                 }
             }
 
-            return Ok(config);
+            return Ok(IsAdminRequest() ? config : RedactAccessCode(config));
         }
 
         [HttpPost("config")]
@@ -136,10 +143,16 @@ namespace QuizAPI.Controllers
         // Generates a "virtual quiz" from a configured quiz or a selection of categories.
         // This endpoint is intentionally anonymous-friendly for pre-employment testing.
         [HttpPost("generate")]
+        [AllowAnonymous]
+        [EnableRateLimiting("PreEmploymentGeneratePolicy")]
         public async Task<IActionResult> Generate([FromBody] PreEmploymentGenerateRequestDto req)
         {
             if (req == null)
                 return BadRequest("Missing request body.");
+
+            var accessCodeResult = await ValidateAccessCodeAsync(req.AccessCode);
+            if (accessCodeResult is not null)
+                return accessCodeResult;
 
             var count = req.QuestionCount ?? DefaultQuestionCount;
             if (count <= 0)
@@ -296,10 +309,16 @@ namespace QuizAPI.Controllers
 
         // Grades a submission against the DB. Correct answers never leave the server.
         [HttpPost("submit")]
+        [AllowAnonymous]
+        [EnableRateLimiting("PreEmploymentSubmitPolicy")]
         public async Task<IActionResult> Submit([FromBody] QuizAttemptSubmitDto attempt)
         {
             if (attempt is null)
                 return BadRequest("Missing request body.");
+
+            var accessCodeResult = await ValidateAccessCodeAsync(attempt.AccessCode);
+            if (accessCodeResult is not null)
+                return accessCodeResult;
 
             var incoming = (attempt.Answers ?? new List<QuestionAttemptDto>())
                 .GroupBy(a => a.QuestionId)
@@ -373,6 +392,11 @@ namespace QuizAPI.Controllers
                 ? 0
                 : Math.Round((double)result.CorrectCount / result.TotalQuestions * 100.0, 2);
 
+            if (!TryReserveThrottle(BuildSubmissionThrottleKey(attempt), SubmissionThrottleWindow))
+            {
+                return StatusCode(StatusCodes.Status429TooManyRequests, "This candidate submission was received recently. Please wait before submitting again.");
+            }
+
             await SaveSubmissionAsync(attempt, result);
             await TrySendCompletionEmailAsync(attempt, result);
 
@@ -433,6 +457,72 @@ namespace QuizAPI.Controllers
             return ids;
         }
 
+        private bool IsAdminRequest()
+        {
+            return User?.Identity?.IsAuthenticated == true && User.IsInRole("Admin");
+        }
+
+        private static PreEmploymentConfigDto RedactAccessCode(PreEmploymentConfigDto config)
+        {
+            config.AccessCodeRequired = !string.IsNullOrWhiteSpace(config.AccessCode);
+            config.AccessCode = null;
+            return config;
+        }
+
+        private async Task<IActionResult?> ValidateAccessCodeAsync(string? suppliedAccessCode)
+        {
+            var config = await _configStore.GetAsync();
+            if (string.IsNullOrWhiteSpace(config.AccessCode))
+                return null;
+
+            return string.Equals(config.AccessCode.Trim(), suppliedAccessCode?.Trim(), StringComparison.Ordinal)
+                ? null
+                : StatusCode(StatusCodes.Status403Forbidden, "A valid pre-employment access code is required.");
+        }
+
+        private bool TryReserveThrottle(string key, TimeSpan window)
+        {
+            if (_cache.TryGetValue(key, out _))
+                return false;
+
+            _cache.Set(key, true, window);
+            return true;
+        }
+
+        private string BuildSubmissionThrottleKey(QuizAttemptSubmitDto attempt)
+        {
+            return BuildThrottleKey(
+                "submit",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                attempt.FirstName,
+                attempt.LastName,
+                attempt.SessionKey);
+        }
+
+        private string BuildEmailThrottleKey(QuizAttemptSubmitDto attempt, string recipient)
+        {
+            return BuildThrottleKey(
+                "email",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                recipient,
+                attempt.FirstName,
+                attempt.LastName);
+        }
+
+        private static string BuildThrottleKey(string scope, params string?[] values)
+        {
+            return "preemployment:" + scope + ":" + string.Join(":", values.Select(NormalizeThrottleKeyPart));
+        }
+
+        private static string NormalizeThrottleKeyPart(string? value)
+        {
+            var normalized = Regex.Replace((value ?? "unknown").Trim().ToLowerInvariant(), @"\s+", " ");
+            if (string.IsNullOrWhiteSpace(normalized))
+                normalized = "unknown";
+
+            return normalized.Length > 120 ? normalized[..120] : normalized;
+        }
+
         private async Task TrySendCompletionEmailAsync(QuizAttemptSubmitDto attempt, QuizAttemptResultDto result)
         {
             try
@@ -445,6 +535,12 @@ namespace QuizAPI.Controllers
 
                 if (string.IsNullOrWhiteSpace(recipient))
                 {
+                    return;
+                }
+
+                if (!TryReserveThrottle(BuildEmailThrottleKey(attempt, recipient), EmailThrottleWindow))
+                {
+                    _logger.LogInformation("Skipped duplicate pre-employment completion email inside throttle window.");
                     return;
                 }
 

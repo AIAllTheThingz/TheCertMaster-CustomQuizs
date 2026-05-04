@@ -7,6 +7,7 @@ namespace QuizAPI.DTO
         public List<Guid> QuizIds { get; set; } = new();
         public int? QuestionCount { get; set; }
         public string? Title { get; set; }
+        public string? AccessCode { get; set; }
     }
 
     public class PreEmploymentQuizDto
@@ -34,5 +35,7 @@ namespace QuizAPI.DTO
         public double PassingScorePercent { get; set; } = 70;
         public bool RandomizeAnswers { get; set; } = true;
         public bool ShowCorrectAnswersAtEnd { get; set; }
+        public bool AccessCodeRequired { get; set; }
+        public string? AccessCode { get; set; }
     }
 }

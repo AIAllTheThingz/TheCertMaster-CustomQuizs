@@ -13,6 +13,7 @@ namespace QuizAPI.Services
     {
         private const int DefaultQuestionCount = 20;
         private const int MaxQuestionLimit = 100;
+        private const int MaxAccessCodeLength = 128;
 
         private readonly string _filePath;
         private readonly object _lock = new();
@@ -89,6 +90,14 @@ namespace QuizAPI.Services
                 questionCount = maxQuestionCount;
             }
 
+            var accessCode = string.IsNullOrWhiteSpace(source.AccessCode)
+                ? null
+                : source.AccessCode.Trim();
+            if (accessCode?.Length > MaxAccessCodeLength)
+            {
+                accessCode = accessCode[..MaxAccessCodeLength];
+            }
+
             return new PreEmploymentConfigDto
             {
                 Title = string.IsNullOrWhiteSpace(source.Title) ? "Pre-Employment Quiz" : source.Title.Trim(),
@@ -108,7 +117,9 @@ namespace QuizAPI.Services
                 TimeLimitMinutes = Math.Max(0, source.TimeLimitMinutes),
                 PassingScorePercent = source.PassingScorePercent < 0 ? 0 : source.PassingScorePercent,
                 RandomizeAnswers = source.RandomizeAnswers,
-                ShowCorrectAnswersAtEnd = source.ShowCorrectAnswersAtEnd
+                ShowCorrectAnswersAtEnd = source.ShowCorrectAnswersAtEnd,
+                AccessCodeRequired = !string.IsNullOrWhiteSpace(accessCode),
+                AccessCode = accessCode
             };
         }
     }

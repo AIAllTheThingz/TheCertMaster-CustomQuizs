@@ -154,11 +154,44 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
             var image = Assert.Single(imageQuestion!.Images);
             Assert.False(string.IsNullOrWhiteSpace(image.Url));
             Assert.Contains("/uploads/images/", image.Url, StringComparison.OrdinalIgnoreCase);
-            Assert.EndsWith("/forklift-safety.svg", image.Url, StringComparison.OrdinalIgnoreCase);
+            Assert.EndsWith("/forklift-safety.png", image.Url, StringComparison.OrdinalIgnoreCase);
 
             using var imageResponse = await client.GetAsync(image.Url);
             Assert.Equal(HttpStatusCode.OK, imageResponse.StatusCode);
-            Assert.Equal("image/svg+xml", imageResponse.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("image/png", imageResponse.Content.Headers.ContentType?.MediaType);
+        }
+        finally
+        {
+            if (File.Exists(packagePath))
+            {
+                File.Delete(packagePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UploadPackage_Rejects_Svg_Image_Files()
+    {
+        await _factory.InitializeAsync();
+
+        using var client = _factory.CreateClient();
+        var token = await LoginAsAdminAsync(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var packagePath = BuildPackageWithSvgImage();
+        try
+        {
+            using var form = new MultipartFormDataContent();
+            await using var packageStream = File.OpenRead(packagePath);
+            using var packageContent = new StreamContent(packageStream);
+            packageContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+            form.Add(packageContent, "File", Path.GetFileName(packagePath));
+
+            using var uploadResponse = await client.PostAsync("/api/import/upload-package", form);
+            Assert.Equal(HttpStatusCode.BadRequest, uploadResponse.StatusCode);
+
+            var body = await uploadResponse.Content.ReadAsStringAsync();
+            Assert.Contains("SVG images are not accepted", body, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -322,6 +355,99 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
     }
 
     [Fact]
+    public async Task PreEmployment_Access_Code_Is_Required_When_Configured_And_Not_Leaked_Publicly()
+    {
+        await _factory.InitializeAsync();
+
+        Guid quizId;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<QuizDbContext>();
+            db.Images.RemoveRange(db.Images);
+            db.Answers.RemoveRange(db.Answers);
+            db.Questions.RemoveRange(db.Questions);
+            db.Quizzes.RemoveRange(db.Quizzes);
+
+            var quiz = new Quiz
+            {
+                Title = "Access Code Quiz",
+                Category = "Screening",
+                Questions = Enumerable.Range(1, 2).Select(i => new Question
+                {
+                    Text = $"Access Code Question {i}",
+                    AllowMultiple = false,
+                    Answers = new List<Answer>
+                    {
+                        new() { Text = $"Correct {i}", IsCorrect = true },
+                        new() { Text = $"Wrong {i}", IsCorrect = false }
+                    }
+                }).ToList()
+            };
+
+            db.Quizzes.Add(quiz);
+            await db.SaveChangesAsync();
+            quizId = quiz.Id;
+        }
+
+        using var client = _factory.CreateClient();
+        var token = await LoginAsAdminAsync(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        try
+        {
+            using var saveResponse = await client.PostAsJsonAsync("/api/preemployment/config", new
+            {
+                Title = "Access Controlled Assessment",
+                QuizIds = new[] { quizId },
+                QuestionCount = 2,
+                AccessCode = "candidate-secret"
+            });
+            Assert.Equal(HttpStatusCode.OK, saveResponse.StatusCode);
+
+            var adminConfig = await saveResponse.Content.ReadFromJsonAsync<PreEmploymentConfigResponse>(_jsonOptions);
+            Assert.NotNull(adminConfig);
+            Assert.Equal("candidate-secret", adminConfig!.AccessCode);
+            Assert.True(adminConfig.AccessCodeRequired);
+
+            client.DefaultRequestHeaders.Authorization = null;
+
+            var publicConfig = await client.GetFromJsonAsync<PreEmploymentConfigResponse>("/api/preemployment/config", _jsonOptions);
+            Assert.NotNull(publicConfig);
+            Assert.True(publicConfig!.AccessCodeRequired);
+            Assert.True(string.IsNullOrWhiteSpace(publicConfig.AccessCode));
+
+            using var blockedGenerate = await client.PostAsJsonAsync("/api/preemployment/generate", new
+            {
+                QuizIds = new[] { quizId },
+                QuestionCount = 2,
+                Title = "Access Controlled Assessment"
+            });
+            Assert.Equal(HttpStatusCode.Forbidden, blockedGenerate.StatusCode);
+
+            using var allowedGenerate = await client.PostAsJsonAsync("/api/preemployment/generate", new
+            {
+                QuizIds = new[] { quizId },
+                QuestionCount = 2,
+                Title = "Access Controlled Assessment",
+                AccessCode = "candidate-secret"
+            });
+            Assert.Equal(HttpStatusCode.OK, allowedGenerate.StatusCode);
+        }
+        finally
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var clearResponse = await client.PostAsJsonAsync("/api/preemployment/config", new
+            {
+                Title = "Access Controlled Assessment",
+                QuizIds = new[] { quizId },
+                QuestionCount = 2,
+                AccessCode = ""
+            });
+        }
+    }
+
+    [Fact]
     public async Task PreEmployment_Submit_Sends_Notification_Email_When_Smtp_Is_Configured()
     {
         await _factory.InitializeAsync();
@@ -482,7 +608,7 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
         using var updateResponse = await client.PutAsJsonAsync($"/api/admin/question-editor/{questionId}", new
         {
             QuestionText = "Updated question text",
-            QuestionImgKey = "updated-image.svg",
+            QuestionImgKey = "updated-image.png",
             Answers = new[]
             {
                 new { Id = answerId1, AnswerText = "Updated answer 1", IsCorrect = false },
@@ -505,8 +631,8 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
             Assert.Equal("Updated answer 2", question.Answers.Single(a => a.Id == answerId2).Text);
             Assert.True(question.Answers.Single(a => a.Id == answerId2).IsCorrect);
             var image = Assert.Single(question.Images);
-            Assert.Equal("updated-image.svg", image.FileName);
-            Assert.Equal("/uploads/images/pkg/updated-image.svg", image.Url);
+            Assert.Equal("updated-image.png", image.FileName);
+            Assert.Equal("/uploads/images/pkg/updated-image.png", image.Url);
         }
     }
 
@@ -1380,15 +1506,13 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
     {
         var sampleDir = Path.Combine(AppContext.BaseDirectory, "Samples", "ImportPackage");
         var csvPath = Path.Combine(sampleDir, "quiz.csv");
-        var imagePath = Path.Combine(sampleDir, "forklift-safety.svg");
 
         Assert.True(File.Exists(csvPath), $"Sample CSV was not copied to test output: {csvPath}");
-        Assert.True(File.Exists(imagePath), $"Sample image was not copied to test output: {imagePath}");
 
         var zipPath = Path.Combine(Path.GetTempPath(), $"sample-import-package-{Guid.NewGuid():N}.zip");
         using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
         archive.CreateEntryFromFile(csvPath, "quiz.csv");
-        archive.CreateEntryFromFile(imagePath, "forklift-safety.svg");
+        AddTinyPngEntry(archive, "forklift-safety.png");
         return zipPath;
     }
 
@@ -1396,17 +1520,40 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
     {
         var sampleDir = Path.Combine(AppContext.BaseDirectory, "Samples", "ImportPackage");
         var csvPath = Path.Combine(sampleDir, "quiz.csv");
-        var imagePath = Path.Combine(sampleDir, "forklift-safety.svg");
 
         Assert.True(File.Exists(csvPath), $"Sample CSV was not copied to test output: {csvPath}");
-        Assert.True(File.Exists(imagePath), $"Sample image was not copied to test output: {imagePath}");
 
         var zipPath = Path.Combine(Path.GetTempPath(), $"malformed-import-package-{Guid.NewGuid():N}.zip");
         using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
         archive.CreateEntryFromFile(csvPath, "quiz.csv");
         archive.CreateEntryFromFile(csvPath, "duplicate.csv");
-        archive.CreateEntryFromFile(imagePath, "forklift-safety.svg");
+        AddTinyPngEntry(archive, "forklift-safety.png");
         return zipPath;
+    }
+
+    private static string BuildPackageWithSvgImage()
+    {
+        var sampleDir = Path.Combine(AppContext.BaseDirectory, "Samples", "ImportPackage");
+        var csvPath = Path.Combine(sampleDir, "quiz.csv");
+
+        Assert.True(File.Exists(csvPath), $"Sample CSV was not copied to test output: {csvPath}");
+
+        var zipPath = Path.Combine(Path.GetTempPath(), $"svg-import-package-{Guid.NewGuid():N}.zip");
+        using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+        archive.CreateEntryFromFile(csvPath, "quiz.csv");
+
+        var svgEntry = archive.CreateEntry("forklift-safety.svg");
+        using var writer = new StreamWriter(svgEntry.Open());
+        writer.Write("<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert('x')</script></svg>");
+        return zipPath;
+    }
+
+    private static void AddTinyPngEntry(ZipArchive archive, string entryName)
+    {
+        var entry = archive.CreateEntry(entryName);
+        var bytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=");
+        using var stream = entry.Open();
+        stream.Write(bytes, 0, bytes.Length);
     }
 
     private sealed class LoginResponse
@@ -1450,6 +1597,8 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
         public string QuizTitle { get; set; } = string.Empty;
         public List<string> QuizTitles { get; set; } = new();
         public int QuestionCount { get; set; }
+        public bool AccessCodeRequired { get; set; }
+        public string? AccessCode { get; set; }
     }
 
     private sealed class PreEmploymentQuizResponse

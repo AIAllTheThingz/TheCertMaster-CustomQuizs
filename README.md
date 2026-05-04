@@ -196,9 +196,55 @@ Important:
 - this automation is written for Windows PowerShell 5.1 and should be run with `powershell.exe`
 - run the scripts from an elevated PowerShell session
 - edit `production-settings.template.psd1` before install
-- the packaged seeded admin account is `admin@quizapi.local` with password `Admin@123`
-- change that default password immediately after the first successful login
+- the packaged seeded admin account email is `admin@quizapi.local`
+- leave `BootstrapAdminPassword` blank to auto-generate a strong temporary install/configuration password, or set one explicitly if needed
+- change the `admin@quizapi.local` password again after setup and configuration are complete
 - full setting guidance is in `Documentation/ProductionSettingsReference.md`
+
+### Post-Deploy Smoke Tests
+
+The default post-deploy smoke test checks the deployed health endpoint, admin login, and quiz catalog:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\post-deploy-smoke-test.ps1 `
+  -BaseUrl http://WIN2K22IIS01 `
+  -AdminEmail admin@quizapi.local `
+  -AdminPassword '<admin password>'
+```
+
+For a fuller browser UI pass, install Node.js plus Playwright on the test machine, then add `-RunBrowserSmokeTest`:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\post-deploy-smoke-test.ps1 `
+  -BaseUrl http://WIN2K22IIS01 `
+  -AdminEmail admin@quizapi.local `
+  -AdminPassword '<admin password>' `
+  -RunBrowserSmokeTest `
+  -BrowserPath 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+```
+
+The browser smoke runner can also be run directly:
+
+```powershell
+$env:QUIZAPI_BASE_URL = 'http://WIN2K22IIS01'
+$env:QUIZAPI_ADMIN_EMAIL = 'admin@quizapi.local'
+$env:QUIZAPI_ADMIN_PASSWORD = '<admin password>'
+node .\scripts\browser-smoke-test.mjs
+```
+
+It exercises login, the management panel, profile page, quiz selection, quiz runner shell, pre-employment page, API reference, upload redirect, and the authenticated read-only API health surface. It intentionally avoids destructive or production-changing actions such as deletes, uploads, user creation, password changes, and saving SMTP or Active Directory settings.
+
+For staging-only user administration checks, use the guarded lifecycle smoke test:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\admin-user-lifecycle-smoke-test.ps1 `
+  -BaseUrl http://staging-host `
+  -AdminEmail admin@quizapi.local `
+  -AdminPassword '<admin password>' `
+  -RunActiveDirectoryTest
+```
+
+This creates a disposable user, changes its role to Admin and back to User, resets its password, verifies sign-in with the reset password, and deletes the disposable user. SMTP testing is skipped unless `-RunSmtpTest -SmtpTestTo someone@example.com` is provided, because it sends a real email. Use `-WhatIf` for a dry run before touching staging data.
 
 ### 1. Prepare Windows
 
@@ -405,8 +451,9 @@ In the current local setup:
 - `App_Data/keys` stores Data Protection keys so auth behavior survives app restarts and IIS recycles
 - if you are moving environments, preserve any needed uploaded content under `wwwroot/uploads`
 - if you are using an existing database, verify schema and migration history carefully before enabling auto-migration
-- standard packaged installs restore the seeded database and include `admin@quizapi.local / Admin@123`
-- change that default password immediately after first login
+- standard packaged installs restore the seeded database and keep `admin@quizapi.local` as the bootstrap admin email
+- if `BootstrapAdminPassword` is left blank, the installer generates a strong temporary install/configuration password and shows it in the summary
+- change the `admin@quizapi.local` password again after setup and configuration are complete
 
 ## Testing
 
@@ -438,6 +485,9 @@ QuizAPI.Tests/      Integration and end-to-end flow tests
 - API JSON is serialized with PascalCase.
 - Development auto-migration is disabled in the current local setup to avoid schema drift against existing databases.
 - Uploaded content and operational files live inside the app structure, including `wwwroot/uploads` and `App_Data`.
+- Quiz package image uploads are limited to PNG, JPG/JPEG, GIF, and WebP. SVG is rejected, and package uploads are checked for compressed size, entry count, total uncompressed size, per-image size, and image file signatures before public extraction.
+- Anonymous pre-employment quiz generation and submission endpoints are rate-limited by remote IP. Production defaults are in `appsettings.Production.json` under `RateLimiting:PreEmployment`.
+- Pre-employment setup can require an optional access code / link token. Candidate links may include `/preemployment.html?code=...`; anonymous config responses only show whether a code is required, not the configured code.
 
 ## Documentation
 

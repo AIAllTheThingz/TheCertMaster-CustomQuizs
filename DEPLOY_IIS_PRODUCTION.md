@@ -38,7 +38,7 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 Optional manual smoke test:
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\post-deploy-smoke-test.ps1 -BaseUrl http://localhost -AdminEmail admin@quizapi.local -AdminPassword Admin@123
+powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\scripts\post-deploy-smoke-test.ps1 -BaseUrl http://localhost -AdminEmail admin@quizapi.local -AdminPassword use-the-generated-install-password
 ```
 
 ## What the Installer Does
@@ -73,21 +73,22 @@ Full setting guidance is documented in:
 
 ## Seeded Admin Account
 
-The packaged seeded database already contains:
+The packaged seeded database already contains the local admin email:
 
 - Email: `admin@quizapi.local`
-- Password: `Admin@123`
 
 Important:
 
-- this default password should be changed immediately after the first successful login
-- if you keep the standard packaged install values, the installer will validate against this seeded admin account
-- if you choose a different bootstrap admin email, the installer will try to let the application create it during startup
+- leave `BootstrapAdminPassword` blank to auto-generate a strong temporary install/configuration password, or set one explicitly if needed
+- during startup, the app will rotate the packaged seeded admin account to the configured bootstrap password whenever it is out of sync
+- change the `admin@quizapi.local` password again after setup and configuration are complete
+- if you choose a different bootstrap admin email, the installer requires that account to be created successfully during startup or the install fails
 
 ## IIS Notes
 
 - the app is designed to run from the root of an IIS site
-- the deployment script now handles common fresh-server HTTP binding conflicts, including the default IIS site on port `80`
+- the deployment script can reclaim the default IIS site HTTP binding on port `80` for a first-time install
+- if another IIS site already owns the requested binding, deployment now fails and asks you to resolve the conflict manually instead of mutating unrelated sites
 - runtime folders such as `App_Data`, `wwwroot/uploads`, and `logs` are created automatically
 
 ## Post-Install Validation
@@ -113,4 +114,4 @@ If the app does not come up:
 If login works but the wrong admin account is expected:
 
 - remember that the packaged seeded database defaults to `admin@quizapi.local`
-- if you typed a different bootstrap email, the app may still validate against the seeded admin unless your custom bootstrap account was successfully created during startup
+- if you typed a different bootstrap email, the install should fail unless that exact account was successfully created during startup

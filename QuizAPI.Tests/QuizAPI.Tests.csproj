@@ -26,7 +26,7 @@
     <Content Include="..\Samples\ImportPackage\quiz.csv" Link="Samples\ImportPackage\quiz.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\Samples\ImportPackage\forklift-safety.svg" Link="Samples\ImportPackage\forklift-safety.svg">
+    <Content Include="..\Samples\ImportPackage\forklift-safety.png" Link="Samples\ImportPackage\forklift-safety.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

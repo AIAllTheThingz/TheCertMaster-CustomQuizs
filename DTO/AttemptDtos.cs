@@ -8,6 +8,7 @@ namespace QuizAPI.DTO
         public string? QuizTitle { get; set; }
         public string? QuizCategory { get; set; }
         public string? SessionKey { get; set; }
+        public string? AccessCode { get; set; }
     }
 
     public class QuestionAttemptDto

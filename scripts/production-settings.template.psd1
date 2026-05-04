@@ -35,12 +35,12 @@
     # Leave blank to let the installer build a local SQL Express connection string.
     ConnectionString = ''
 
-    # The packaged seed database already contains admin@quizapi.local / Admin@123.
-    # Change this password immediately after first login in any real environment.
-    # Keep these values for the standard packaged install, or replace them if you want
-    # the application to create/update a different fallback local admin during startup.
+    # The packaged seed database already contains the admin@quizapi.local account.
+    # Leave BootstrapAdminPassword blank to let the installer generate a strong
+    # temporary install/configuration password and show it in the install summary.
+    # Change the admin@quizapi.local password again after setup is complete.
     BootstrapAdminEmail = 'admin@quizapi.local'
-    BootstrapAdminPassword = 'Admin@123'
+    BootstrapAdminPassword = ''
     BootstrapAdminFirstName = 'Server'
     BootstrapAdminLastName = 'Admin'
 

@@ -99,7 +99,7 @@ function Remove-IisAspNetCoreEnvVarsByPrefix {
     }
 }
 
-function Remove-ConflictingBindings {
+function Resolve-ConflictingBindings {
     param(
         [string]$TargetSiteName,
         [string]$TargetProtocol,
@@ -108,6 +108,8 @@ function Remove-ConflictingBindings {
     )
 
     $normalizedHostHeader = if ([string]::IsNullOrWhiteSpace($TargetHostHeader)) { "" } else { $TargetHostHeader }
+
+    $conflicts = @()
 
     foreach ($site in Get-Website) {
         if ($site.Name -eq $TargetSiteName) {
@@ -125,16 +127,48 @@ function Remove-ConflictingBindings {
             $bindingHostHeader = if ($bindingParts.Count -gt 2) { $bindingParts[2] } else { "" }
 
             if ($bindingPort -eq $TargetPort -and $bindingHostHeader -eq $normalizedHostHeader) {
-                Write-Warning "Removing conflicting $TargetProtocol binding from site '$($site.Name)' on port $TargetPort host '$normalizedHostHeader'."
-                Remove-WebBinding -Name $site.Name -Protocol $binding.protocol -Port $bindingPort -HostHeader $bindingHostHeader
+                $conflicts += [pscustomobject]@{
+                    SiteName = $site.Name
+                    Protocol = $binding.protocol
+                    Port = $bindingPort
+                    HostHeader = $bindingHostHeader
+                }
+            }
+        }
+    }
+
+    if ($conflicts.Count -eq 0) {
+        return
+    }
+
+    $canTakeDefaultHttpBinding =
+        $TargetProtocol -eq 'http' -and
+        $TargetPort -eq 80 -and
+        [string]::IsNullOrWhiteSpace($normalizedHostHeader) -and
+        $conflicts.Count -eq 1 -and
+        $conflicts[0].SiteName -eq 'Default Web Site'
+
+    if ($canTakeDefaultHttpBinding) {
+        Write-Warning "Reclaiming the default HTTP binding from 'Default Web Site' so '$TargetSiteName' can own port 80."
+        Remove-WebBinding -Name 'Default Web Site' -Protocol 'http' -Port 80 -HostHeader ''
+
+        $defaultSite = Get-Website -Name 'Default Web Site' -ErrorAction SilentlyContinue
+        if ($null -ne $defaultSite) {
+            $remainingBindings = @(Get-WebBinding -Name 'Default Web Site' -ErrorAction SilentlyContinue)
+            if ($remainingBindings.Count -eq 0 -and $defaultSite.State -eq 'Started') {
+                Stop-Website -Name 'Default Web Site'
             }
         }
 
-        $remainingBindings = @(Get-WebBinding -Name $site.Name -ErrorAction SilentlyContinue)
-        if ($remainingBindings.Count -eq 0 -and $site.State -eq 'Started') {
-            Stop-Website -Name $site.Name
-        }
+        return
     }
+
+    $conflictSummary = $conflicts | ForEach-Object {
+        $hostDisplay = if ([string]::IsNullOrWhiteSpace($_.HostHeader)) { '(no host header)' } else { $_.HostHeader }
+        "'$($_.SiteName)' [$($_.Protocol) :$($_.Port) $hostDisplay]"
+    }
+
+    throw "Binding conflict detected for $TargetProtocol port $TargetPort host '$normalizedHostHeader'. Resolve these existing IIS bindings before deployment: $($conflictSummary -join ', ')"
 }
 
 if ([string]::IsNullOrWhiteSpace($JwtKey)) {
@@ -214,7 +248,7 @@ Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name processModel.identityType -V
 Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name autoStart -Value $true
 
 Write-Step "Ensuring dedicated IIS site exists at root"
-Remove-ConflictingBindings -TargetSiteName $SiteName -TargetProtocol $Protocol -TargetPort $Port -TargetHostHeader $HostName
+Resolve-ConflictingBindings -TargetSiteName $SiteName -TargetProtocol $Protocol -TargetPort $Port -TargetHostHeader $HostName
 
 if (-not (Test-Path "IIS:\Sites\$SiteName")) {
     New-Website -Name $SiteName -PhysicalPath $SitePath -ApplicationPool $AppPoolName -Port $Port -HostHeader $HostName | Out-Null
