@@ -219,8 +219,10 @@ Ensure-Directory -Path $stagingPath
 
 try {
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $stagingPath -Force
+    $packageRoot = Join-Path $stagingPath 'TheCertMaster-CustomQuizs'
+    $copySource = if (Test-Path -LiteralPath $packageRoot) { $packageRoot } else { $stagingPath }
     Clear-DirectoryContents -Path $SitePath
-    Copy-Item -Path (Join-Path $stagingPath '*') -Destination $SitePath -Recurse -Force
+    Copy-Item -Path (Join-Path $copySource '*') -Destination $SitePath -Recurse -Force
 }
 finally {
     if (Test-Path $stagingPath) {

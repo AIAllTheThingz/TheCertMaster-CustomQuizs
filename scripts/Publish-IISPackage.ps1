@@ -61,6 +61,9 @@ do {
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $publishPath = Join-Path $publishRootFullPath $timestamp
+$packageRootName = "TheCertMaster-CustomQuizs"
+$packageRootPath = Join-Path $publishRootFullPath "$timestamp-package"
+$packageContentPath = Join-Path $packageRootPath $packageRootName
 
 New-Item -ItemType Directory -Path $publishRootFullPath -Force | Out-Null
 New-Item -ItemType Directory -Path $bundleRootFullPath -Force | Out-Null
@@ -115,7 +118,14 @@ if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
 
-Compress-Archive -Path (Join-Path $publishPath "*") -DestinationPath $zipPath -CompressionLevel Optimal
+if (Test-Path $packageRootPath) {
+    Remove-Item -LiteralPath $packageRootPath -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $packageContentPath -Force | Out-Null
+Copy-Item -Path (Join-Path $publishPath "*") -Destination $packageContentPath -Recurse -Force
+
+Compress-Archive -Path $packageContentPath -DestinationPath $zipPath -CompressionLevel Optimal
 
 Write-Step "Package ready"
 Write-Host "Publish folder: $publishPath"
