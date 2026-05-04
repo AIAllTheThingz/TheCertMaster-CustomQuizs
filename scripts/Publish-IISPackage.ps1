@@ -81,6 +81,29 @@ if (Test-Path $publishPath) {
 
 Invoke-NativeCommand -FilePath "dotnet" -Arguments @("publish", $projectFullPath, "-c", $Configuration, "--no-build", "-o", $publishPath)
 
+Write-Step "Adding deployment support files"
+$supportItems = @(
+    "scripts",
+    "DEPLOY_IIS_PRODUCTION.md",
+    "README_INSTALL.txt",
+    "IMPORT_PACKAGE_SAMPLE.md",
+    "Documentation"
+)
+
+foreach ($item in $supportItems) {
+    $sourcePath = Join-Path $repoRoot $item
+    if (-not (Test-Path -LiteralPath $sourcePath)) {
+        continue
+    }
+
+    $destinationPath = Join-Path $publishPath $item
+    if (Test-Path -LiteralPath $destinationPath) {
+        Remove-Item -LiteralPath $destinationPath -Recurse -Force
+    }
+
+    Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Recurse -Force
+}
+
 Write-Step "Creating deployment zip"
 if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
