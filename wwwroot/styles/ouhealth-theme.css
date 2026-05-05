@@ -80,3 +80,298 @@ body {
     text-align: center;
     box-shadow: var(--shadow);
 }
+
+/* TheCertMaster dark focus theme */
+body {
+    --bg: #100f0d;
+    --panel: rgba(27, 24, 20, 0.9);
+    --panel-2: rgba(255, 255, 255, 0.045);
+    --ink: #fff9ef;
+    --muted: #c8bbab;
+    --line: rgba(238, 208, 151, 0.18);
+    --primary: #e8b25a;
+    --secondary: #2f8b83;
+    --accent: #e8b25a;
+    --accent-2: #2f8b83;
+    --danger: #b6514b;
+    --danger-hover: #d4615a;
+    --ok: #71d6a7;
+    --error: #ff918a;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.3);
+    position: relative;
+    min-height: 100vh;
+    background:
+        linear-gradient(90deg, rgba(16, 15, 13, 0.46), rgba(16, 15, 13, 0.82) 48%, rgba(16, 15, 13, 0.96) 82%),
+        linear-gradient(180deg, rgba(16, 15, 13, 0.18), #100f0d 720px),
+        url("/concepts/assets/dark-exam-readiness.png") center top / cover fixed,
+        #100f0d !important;
+    color: var(--ink) !important;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    letter-spacing: 0;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 72% 18%, rgba(232, 178, 90, 0.14), transparent 26%),
+        linear-gradient(180deg, transparent 0, rgba(16, 15, 13, 0.96) 82vh);
+}
+
+h1,
+h2,
+h3,
+h4,
+strong {
+    color: var(--ink);
+    letter-spacing: 0;
+}
+
+p,
+label,
+.muted,
+.lede,
+.lead,
+.status,
+.tip,
+.topnav,
+.accountStatus,
+.card p,
+.panel p,
+td,
+th {
+    color: var(--muted) !important;
+}
+
+h1 {
+    font-weight: 850;
+}
+
+.wrap,
+.page,
+.shell {
+    position: relative;
+    z-index: 1;
+}
+
+.site-menu {
+    position: sticky;
+    top: 12px;
+    z-index: 10;
+    border-color: rgba(238, 208, 151, 0.16) !important;
+    border-radius: 8px !important;
+    background: rgba(13, 12, 11, 0.72) !important;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26) !important;
+    backdrop-filter: blur(18px);
+}
+
+.site-menu a,
+.app-link {
+    border-radius: 8px !important;
+    color: #f2c978 !important;
+    text-decoration: none !important;
+}
+
+.site-menu a {
+    background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.site-menu a:hover,
+.app-link:hover {
+    background: rgba(232, 178, 90, 0.11) !important;
+    color: #fff1cf !important;
+}
+
+.panel,
+.card,
+form,
+#fileTable,
+#userManager,
+#systemStatusSection,
+#smtpSettings,
+#quizSection,
+#questionEditorSection,
+#quizCreatorSection,
+#historySection,
+#preEmploymentSettings,
+#apiReferenceSection,
+#status,
+.statusCard,
+.quizItem,
+.stat,
+.answer,
+.reviewAnswer,
+.checkboxRow,
+.resultPill,
+.token-row,
+.module,
+.endpoint {
+    border-color: rgba(238, 208, 151, 0.18) !important;
+    border-radius: 8px !important;
+    background: rgba(27, 24, 20, 0.9) !important;
+    color: var(--ink) !important;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28) !important;
+    backdrop-filter: blur(14px);
+}
+
+.stat,
+.statusCard,
+.quizItem,
+.answer,
+.reviewAnswer,
+.checkboxRow,
+.resultPill {
+    background: rgba(255, 255, 255, 0.045) !important;
+    box-shadow: none !important;
+}
+
+.answer:hover,
+.quizItem:hover,
+.reviewAnswer:hover {
+    border-color: rgba(232, 178, 90, 0.48) !important;
+}
+
+input,
+select,
+textarea {
+    border-color: rgba(238, 208, 151, 0.2) !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: var(--ink) !important;
+    outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: rgba(200, 187, 171, 0.62) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: rgba(232, 178, 90, 0.64) !important;
+    box-shadow: 0 0 0 3px rgba(232, 178, 90, 0.14) !important;
+}
+
+button,
+.primary,
+.primaryButton,
+.secondary,
+.danger {
+    min-height: 42px;
+    border: 0 !important;
+    border-radius: 8px !important;
+    font-weight: 800 !important;
+    transition: transform 0.18s ease, filter 0.18s ease, background 0.18s ease;
+}
+
+button:hover,
+.primary:hover,
+.primaryButton:hover,
+.secondary:hover,
+.danger:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05) !important;
+}
+
+button,
+.primary,
+.primaryButton {
+    background: #e8b25a !important;
+    color: #1d1205 !important;
+}
+
+.secondary {
+    background: #2f8b83 !important;
+    color: #f7fffc !important;
+}
+
+.danger {
+    background: #b6514b !important;
+    color: #fff9ef !important;
+}
+
+button:disabled {
+    opacity: 0.48 !important;
+    transform: none;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+th {
+    color: rgba(242, 201, 120, 0.88) !important;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+}
+
+td,
+th {
+    border-color: rgba(238, 208, 151, 0.14) !important;
+}
+
+.pill,
+.quizCount,
+.accountStatus,
+.resultPill,
+.statusBanner,
+.formStatus {
+    border-radius: 999px !important;
+}
+
+.pill,
+.quizCount {
+    background: rgba(232, 178, 90, 0.13) !important;
+    color: #f8d998 !important;
+}
+
+.ok,
+.statusBanner.ok,
+.resultPill.ok,
+.formStatus.ok {
+    color: #87e6b7 !important;
+    background: rgba(76, 175, 121, 0.12) !important;
+    border-color: rgba(135, 230, 183, 0.24) !important;
+}
+
+.bad,
+.error,
+.statusBanner.error,
+.resultPill.error,
+.formStatus.error {
+    color: #ffaaa4 !important;
+    background: rgba(182, 81, 75, 0.14) !important;
+    border-color: rgba(255, 170, 164, 0.24) !important;
+}
+
+.warn,
+.statusBanner.warn {
+    color: #f8d998 !important;
+    background: rgba(232, 178, 90, 0.13) !important;
+    border-color: rgba(248, 217, 152, 0.24) !important;
+}
+
+hr {
+    border-color: rgba(238, 208, 151, 0.16) !important;
+}
+
+img {
+    border-color: rgba(238, 208, 151, 0.16) !important;
+}
+
+@media (max-width: 760px) {
+    body {
+        background:
+            linear-gradient(180deg, rgba(16, 15, 13, 0.62), #100f0d 520px),
+            url("/concepts/assets/dark-exam-readiness.png") center top / auto 520px no-repeat,
+            #100f0d !important;
+    }
+
+    .site-menu {
+        position: static;
+    }
+}
