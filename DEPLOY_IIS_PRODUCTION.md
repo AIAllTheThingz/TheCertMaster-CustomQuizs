@@ -80,8 +80,8 @@ The packaged seeded database already contains the local admin email:
 Important:
 
 - leave `BootstrapAdminPassword` blank to auto-generate a strong temporary install/configuration password, or set one explicitly if needed
-- during startup, the app will rotate the packaged seeded admin account to the configured bootstrap password whenever it is out of sync
-- change the `admin@quizapi.local` password again after setup and configuration are complete
+- during startup, the app rotates the packaged seeded admin account to the configured bootstrap password only when that account is still using the packaged default password
+- change the `admin@quizapi.local` password again after setup and configuration are complete; later restarts preserve that user-changed password
 - if you choose a different bootstrap admin email, the installer requires that account to be created successfully during startup or the install fails
 
 ## IIS Notes

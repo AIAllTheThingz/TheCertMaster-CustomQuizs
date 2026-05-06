@@ -5,6 +5,7 @@ namespace QuizAPI.DTO
         public List<string> Categories { get; set; } = new();
         public Guid? QuizId { get; set; }
         public List<Guid> QuizIds { get; set; } = new();
+        public List<Guid> QuestionIds { get; set; } = new();
         public int? QuestionCount { get; set; }
         public string? Title { get; set; }
         public string? AccessCode { get; set; }
@@ -29,6 +30,8 @@ namespace QuizAPI.DTO
         public string? QuizTitle { get; set; }
         public List<Guid> QuizIds { get; set; } = new();
         public List<string> QuizTitles { get; set; } = new();
+        public List<Guid> QuestionIds { get; set; } = new();
+        public List<QuizCreatorSelectedQuestionDto> SelectedQuestions { get; set; } = new();
         public int QuestionCount { get; set; } = 20;
         public int MaxQuestionCount { get; set; } = 100;
         public int TimeLimitMinutes { get; set; }

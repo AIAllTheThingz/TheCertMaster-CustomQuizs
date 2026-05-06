@@ -35,7 +35,7 @@ Current visible admin sections:
 | User management | Present | Search, create user, role and profile updates are present |
 | SMTP settings | Present | Save, reload, and send-test behavior is present |
 | Usage reporting | Present | Metrics and export behavior are present |
-| Pre-employment setup | Present | Configurable quiz selection, question counts, timer, and passing score |
+| Pre-employment setup | Present | Configurable source quiz selection, random counts, exact-question selection, access code, timer, and passing score |
 | Pre-employment attempts | Present | Candidate submissions are viewable |
 | Question maintenance | Present | Question Editor supports paged question updates |
 | Custom quiz creation | Present | Quiz Creator supports assembling quizzes from `Basic` quiz questions |
@@ -64,7 +64,7 @@ These are the best next admin workflows to validate live because they tend to hi
 
 - import package processing with images
 - SMTP save and test email
-- pre-employment configuration save and runner launch
+- pre-employment configuration save, exact-question selection, and runner launch
 - import history export
 - user metrics export
 - archive and restore quiz actions

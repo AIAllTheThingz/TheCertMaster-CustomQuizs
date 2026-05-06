@@ -57,14 +57,14 @@ public sealed class BootstrapAdminStartupTests
     {
         const string bootstrapAdminEmail = "admin@quizapi.local";
         const string configuredBootstrapPassword = "RotatedBootstrap123!";
-        const string legacySeededPassword = "LegacySeededPassword123!";
+        const string packagedSeededPassword = "Admin@123";
 
         using var factory = new BootstrapAdminTestApplicationFactory(
             bootstrapAdminEmail,
             configuredBootstrapPassword,
             "Server",
             "Admin",
-            legacySeededPassword);
+            packagedSeededPassword);
         using var client = factory.CreateClient();
 
         using var scope = factory.Services.CreateScope();
@@ -75,13 +75,43 @@ public sealed class BootstrapAdminStartupTests
         Assert.Equal("Server", bootstrapAdmin!.FirstName);
         Assert.Equal("Admin", bootstrapAdmin.LastName);
         Assert.True(await userManager.CheckPasswordAsync(bootstrapAdmin, configuredBootstrapPassword));
-        Assert.False(await userManager.CheckPasswordAsync(bootstrapAdmin, legacySeededPassword));
+        Assert.False(await userManager.CheckPasswordAsync(bootstrapAdmin, packagedSeededPassword));
 
         using var configuredLoginResponse = await LoginAsync(client, bootstrapAdminEmail, configuredBootstrapPassword);
         Assert.Equal(HttpStatusCode.OK, configuredLoginResponse.StatusCode);
 
-        using var legacyLoginResponse = await LoginAsync(client, bootstrapAdminEmail, legacySeededPassword);
-        Assert.Equal(HttpStatusCode.Unauthorized, legacyLoginResponse.StatusCode);
+        using var packagedSeedLoginResponse = await LoginAsync(client, bootstrapAdminEmail, packagedSeededPassword);
+        Assert.Equal(HttpStatusCode.Unauthorized, packagedSeedLoginResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Startup_Does_Not_Revert_Customized_Packaged_Admin_Password()
+    {
+        const string bootstrapAdminEmail = "admin@quizapi.local";
+        const string configuredBootstrapPassword = "GeneratedInstallPassword123!";
+        const string customizedAdminPassword = "UserChangedPassword123!";
+
+        using var factory = new BootstrapAdminTestApplicationFactory(
+            bootstrapAdminEmail,
+            configuredBootstrapPassword,
+            "Server",
+            "Admin",
+            customizedAdminPassword);
+        using var client = factory.CreateClient();
+
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var bootstrapAdmin = await userManager.FindByEmailAsync(bootstrapAdminEmail);
+
+        Assert.NotNull(bootstrapAdmin);
+        Assert.True(await userManager.CheckPasswordAsync(bootstrapAdmin!, customizedAdminPassword));
+        Assert.False(await userManager.CheckPasswordAsync(bootstrapAdmin!, configuredBootstrapPassword));
+
+        using var customizedLoginResponse = await LoginAsync(client, bootstrapAdminEmail, customizedAdminPassword);
+        Assert.Equal(HttpStatusCode.OK, customizedLoginResponse.StatusCode);
+
+        using var generatedLoginResponse = await LoginAsync(client, bootstrapAdminEmail, configuredBootstrapPassword);
+        Assert.Equal(HttpStatusCode.Unauthorized, generatedLoginResponse.StatusCode);
     }
 
     private static Task<HttpResponseMessage> LoginAsync(HttpClient client, string email, string password)

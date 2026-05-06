@@ -200,6 +200,18 @@ form,
 #apiReferenceSection,
 #status,
 .statusCard,
+.accountBubble,
+.accountLinks,
+.controls,
+.field,
+.setup,
+.toolbar,
+.editorSidebar,
+.swaggerWrap,
+.swaggerHead,
+.swaggerDisabled,
+.swagger-wrap,
+.swagger-head,
 .quizItem,
 .stat,
 .answer,
@@ -219,13 +231,45 @@ form,
 
 .stat,
 .statusCard,
+.accountBubble,
+.statusCard.good,
+.statusCard.warn,
+.statusCard.bad,
 .quizItem,
 .answer,
 .reviewAnswer,
 .checkboxRow,
-.resultPill {
+.resultPill,
+.tip {
     background: rgba(255, 255, 255, 0.045) !important;
     box-shadow: none !important;
+}
+
+.statusCard.good {
+    color: #87e6b7 !important;
+    background: rgba(76, 175, 121, 0.12) !important;
+    border-color: rgba(135, 230, 183, 0.24) !important;
+}
+
+.statusCard.warn {
+    color: #f8d998 !important;
+    background: rgba(232, 178, 90, 0.13) !important;
+    border-color: rgba(248, 217, 152, 0.24) !important;
+}
+
+.statusCard.bad {
+    color: #ffaaa4 !important;
+    background: rgba(182, 81, 75, 0.14) !important;
+    border-color: rgba(255, 170, 164, 0.24) !important;
+}
+
+.statusCard.good .label,
+.statusCard.good .value,
+.statusCard.warn .label,
+.statusCard.warn .value,
+.statusCard.bad .label,
+.statusCard.bad .value {
+    color: inherit !important;
 }
 
 .answer:hover,
@@ -236,12 +280,44 @@ form,
 
 input,
 select,
-textarea {
+textarea,
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+.toolbar select {
     border-color: rgba(238, 208, 151, 0.2) !important;
     border-radius: 8px !important;
     background: rgba(255, 255, 255, 0.06) !important;
     color: var(--ink) !important;
     outline: none;
+}
+
+select,
+option,
+optgroup {
+    background-color: #1b1814 !important;
+    color: var(--ink) !important;
+}
+
+select[multiple] {
+    padding: 8px !important;
+}
+
+select[multiple] option {
+    margin: 4px 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.045) !important;
+    color: var(--ink) !important;
+}
+
+select[multiple] option:checked {
+    background: linear-gradient(rgba(76, 175, 121, 0.24), rgba(76, 175, 121, 0.24)), #1b1814 !important;
+    color: #c9f8dd !important;
 }
 
 input::placeholder,
@@ -254,6 +330,11 @@ select:focus,
 textarea:focus {
     border-color: rgba(232, 178, 90, 0.64) !important;
     box-shadow: 0 0 0 3px rgba(232, 178, 90, 0.14) !important;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: #e8b25a;
 }
 
 button,
@@ -361,6 +442,40 @@ hr {
 
 img {
     border-color: rgba(238, 208, 151, 0.16) !important;
+}
+
+.imggrid img,
+.imagePreview,
+.preview,
+.swaggerFrame,
+.swagger-wrap iframe,
+pre,
+code,
+kbd {
+    background: rgba(13, 12, 11, 0.72) !important;
+    color: var(--ink) !important;
+}
+
+code,
+kbd {
+    border: 1px solid rgba(238, 208, 151, 0.18);
+    border-radius: 6px;
+    padding: 2px 6px;
+}
+
+.swaggerFrame,
+.swagger-wrap iframe {
+    filter: invert(0.88) hue-rotate(180deg) saturate(0.78);
+}
+
+.reviewAnswer.correct {
+    border-color: rgba(135, 230, 183, 0.34) !important;
+    background: rgba(76, 175, 121, 0.14) !important;
+}
+
+.reviewAnswer.selectedOnly {
+    border-color: rgba(109, 169, 207, 0.34) !important;
+    background: rgba(47, 139, 131, 0.12) !important;
 }
 
 @media (max-width: 760px) {

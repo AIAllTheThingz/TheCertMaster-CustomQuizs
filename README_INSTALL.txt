@@ -21,8 +21,9 @@ Required install commands
    - BootstrapAdminPassword = leave blank to auto-generate a random temporary password
 
    The packaged database already contains the `admin@quizapi.local` account, and startup
-   will rotate that seeded admin to the configured bootstrap password. If the password is
-   left blank, the installer generates one and prints it in the install summary.
+   will rotate that seeded admin to the configured bootstrap password only when it is
+   still using the packaged default password. If the password is left blank, the installer
+   generates one and prints it in the install summary.
 
 3. Run:
 
@@ -41,7 +42,7 @@ Notes
 - Update production-settings.template.psd1 before install if the hostname, database, or deployment values need to change.
 - The packaged seeded admin account email is `admin@quizapi.local`.
 - Leave `BootstrapAdminPassword` blank to auto-generate a strong temporary install/configuration password, or set one explicitly if your rollout requires it.
-- Change the `admin@quizapi.local` password again after setup and configuration are complete.
+- Change the `admin@quizapi.local` password again after setup and configuration are complete; later restarts preserve that user-changed password.
 - The install script performs the deploy and smoke test when enabled in settings.
 - Full setting-by-setting guidance is in:
   Documentation\ProductionSettingsReference.md

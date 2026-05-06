@@ -83,6 +83,41 @@ namespace QuizAPI.Controllers
                 }
             }
 
+            var selectedQuestionIds = GetRequestedQuestionIds(config.QuestionIds);
+            if (selectedQuestionIds.Count > 0)
+            {
+                var selectedQuestions = await _db.Questions
+                    .AsNoTracking()
+                    .Include(q => q.Quiz)
+                    .Where(q => selectedQuestionIds.Contains(q.Id))
+                    .Where(q => q.Quiz != null && !q.Quiz.IsArchived)
+                    .ToListAsync();
+
+                if (selectedQuestions.Count > 0)
+                {
+                    var byId = selectedQuestions.ToDictionary(q => q.Id);
+                    config.QuestionIds = selectedQuestionIds
+                        .Where(byId.ContainsKey)
+                        .ToList();
+                    config.SelectedQuestions = config.QuestionIds
+                        .Select(id => byId[id])
+                        .Select(q => new QuizCreatorSelectedQuestionDto
+                        {
+                            QuestionId = q.Id,
+                            QuizTitle = q.Quiz!.Title,
+                            QuestionText = q.Text
+                        })
+                        .ToList();
+                    config.QuestionCount = config.QuestionIds.Count;
+                    config.MaxQuestionCount = config.QuestionIds.Count;
+                }
+                else
+                {
+                    config.QuestionIds = new List<Guid>();
+                    config.SelectedQuestions = new List<QuizCreatorSelectedQuestionDto>();
+                }
+            }
+
             return Ok(IsAdminRequest() ? config : RedactAccessCode(config));
         }
 
@@ -94,7 +129,8 @@ namespace QuizAPI.Controllers
                 return BadRequest("Missing request body.");
 
             var selectedIds = GetRequestedQuizIds(config.QuizId, config.QuizIds);
-            if (selectedIds.Count == 0)
+            var selectedQuestionIds = GetRequestedQuestionIds(config.QuestionIds);
+            if (selectedIds.Count == 0 && selectedQuestionIds.Count == 0)
                 return BadRequest("At least one source quiz must be selected.");
 
             var quizzes = await _db.Quizzes
@@ -103,8 +139,41 @@ namespace QuizAPI.Controllers
                 .Where(q => selectedIds.Contains(q.Id) && !q.IsArchived)
                 .ToListAsync();
 
-            if (quizzes.Count != selectedIds.Count)
+            if (selectedIds.Count > 0 && quizzes.Count != selectedIds.Count)
                 return BadRequest("One or more selected quizzes were not found.");
+
+            List<Models.Question> selectedQuestions = new();
+            if (selectedQuestionIds.Count > 0)
+            {
+                selectedQuestions = await _db.Questions
+                    .AsNoTracking()
+                    .Include(q => q.Quiz)
+                    .Where(q => selectedQuestionIds.Contains(q.Id))
+                    .Where(q => q.Quiz != null && !q.Quiz.IsArchived)
+                    .ToListAsync();
+
+                if (selectedQuestions.Count != selectedQuestionIds.Count)
+                    return BadRequest("One or more selected questions were not found.");
+
+                if (selectedIds.Count > 0 && selectedQuestions.Any(q => !selectedIds.Contains(q.QuizId)))
+                    return BadRequest("One or more selected questions are not from the selected source quizzes.");
+
+                if (selectedIds.Count == 0)
+                {
+                    var selectedQuestionQuizIds = selectedQuestions
+                        .Select(q => q.QuizId)
+                        .Distinct()
+                        .ToList();
+
+                    quizzes = await _db.Quizzes
+                        .AsNoTracking()
+                        .Include(q => q.Questions)
+                        .Where(q => selectedQuestionQuizIds.Contains(q.Id) && !q.IsArchived)
+                        .ToListAsync();
+
+                    selectedIds = selectedQuestionQuizIds;
+                }
+            }
 
             var availableQuestionCount = quizzes.Sum(q => q.Questions.Count);
             if (availableQuestionCount == 0)
@@ -112,10 +181,10 @@ namespace QuizAPI.Controllers
 
             var maxPerQuizQuestionCount = quizzes.Min(q => q.Questions.Count);
 
-            if (config.QuestionCount <= 0)
+            if (selectedQuestionIds.Count == 0 && config.QuestionCount <= 0)
                 return BadRequest("QuestionCount must be greater than 0.");
 
-            if (config.QuestionCount > maxPerQuizQuestionCount)
+            if (selectedQuestionIds.Count == 0 && config.QuestionCount > maxPerQuizQuestionCount)
             {
                 var totalAvailable = maxPerQuizQuestionCount * quizzes.Count;
                 return BadRequest($"QuestionCount may not exceed the smallest selected quiz ({maxPerQuizQuestionCount} per quiz, {totalAvailable} total across {quizzes.Count} quiz(es)).");
@@ -125,18 +194,40 @@ namespace QuizAPI.Controllers
             config.QuizTitles = quizzes.Select(q => q.Title).ToList();
             config.QuizId = config.QuizIds.Count == 1 ? config.QuizIds[0] : null;
             config.QuizTitle = config.QuizTitles.Count == 1 ? config.QuizTitles[0] : null;
+            config.QuestionIds = selectedQuestionIds;
+            config.SelectedQuestions = selectedQuestionIds.Count == 0
+                ? new List<QuizCreatorSelectedQuestionDto>()
+                : selectedQuestionIds
+                    .Select(id => selectedQuestions.First(q => q.Id == id))
+                    .Select(q => new QuizCreatorSelectedQuestionDto
+                    {
+                        QuestionId = q.Id,
+                        QuizTitle = q.Quiz!.Title,
+                        QuestionText = q.Text
+                    })
+                    .ToList();
             if (string.IsNullOrWhiteSpace(config.Title))
             {
                 config.Title = "Pre-Employment Quiz";
             }
 
-            config.MaxQuestionCount = Math.Min(MaxQuestionCount, maxPerQuizQuestionCount);
+            if (selectedQuestionIds.Count > 0)
+            {
+                config.QuestionCount = selectedQuestionIds.Count;
+                config.MaxQuestionCount = selectedQuestionIds.Count;
+            }
+            else
+            {
+                config.MaxQuestionCount = Math.Min(MaxQuestionCount, maxPerQuizQuestionCount);
+            }
 
             var saved = await _configStore.SaveAsync(config);
             saved.QuizTitles = quizzes.Select(q => q.Title).ToList();
             saved.QuizIds = quizzes.Select(q => q.Id).ToList();
             saved.QuizId = saved.QuizIds.Count == 1 ? saved.QuizIds[0] : null;
             saved.QuizTitle = saved.QuizTitles.Count == 1 ? saved.QuizTitles[0] : null;
+            saved.QuestionIds = config.QuestionIds;
+            saved.SelectedQuestions = config.SelectedQuestions;
             return Ok(saved);
         }
 
@@ -165,12 +256,20 @@ namespace QuizAPI.Controllers
             var sourceQuizTitles = new List<string>();
             var selectedQuizTitleMap = new Dictionary<Guid, string>();
             var selectedQuizIds = GetRequestedQuizIds(req.QuizId, req.QuizIds);
+            var selectedQuestionIds = GetRequestedQuestionIds(req.QuestionIds);
             IQueryable<Models.Question> poolQuery = _db.Questions
                 .AsNoTracking()
                 .Include(q => q.Answers)
-                .Include(q => q.Images);
+                .Include(q => q.Images)
+                .Include(q => q.Quiz);
 
-            if (selectedQuizIds.Count > 0)
+            if (selectedQuestionIds.Count > 0)
+            {
+                poolQuery = poolQuery
+                    .Where(q => selectedQuestionIds.Contains(q.Id))
+                    .Where(q => q.Quiz != null && !q.Quiz.IsArchived);
+            }
+            else if (selectedQuizIds.Count > 0)
             {
                 var sourceQuizzes = await _db.Quizzes
                     .AsNoTracking()
@@ -225,7 +324,32 @@ namespace QuizAPI.Controllers
 
             List<Models.Question> picked;
 
-            if (selectedQuizIds.Count > 0)
+            if (selectedQuestionIds.Count > 0)
+            {
+                if (pool.Count != selectedQuestionIds.Count)
+                    return BadRequest("One or more selected questions were not found.");
+
+                var sourceQuizzes = pool
+                    .Select(q => q.Quiz!)
+                    .DistinctBy(q => q.Id)
+                    .OrderBy(q => q.Title)
+                    .ToList();
+
+                selectedQuizIds = sourceQuizzes.Select(q => q.Id).ToList();
+                sourceQuizTitles = sourceQuizzes.Select(q => q.Title).ToList();
+                categories = sourceQuizzes
+                    .Select(q => NormalizeCategory(q.Category))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var byId = pool.ToDictionary(q => q.Id);
+                picked = selectedQuestionIds
+                    .Where(byId.ContainsKey)
+                    .Select(id => byId[id])
+                    .OrderBy(_ => _rng.Next())
+                    .ToList();
+            }
+            else if (selectedQuizIds.Count > 0)
             {
                 var groupedQuestions = pool
                     .GroupBy(q => q.QuizId)
@@ -455,6 +579,14 @@ namespace QuizAPI.Controllers
             }
 
             return ids;
+        }
+
+        private static List<Guid> GetRequestedQuestionIds(List<Guid>? questionIds)
+        {
+            return (questionIds ?? new List<Guid>())
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
         }
 
         private bool IsAdminRequest()
