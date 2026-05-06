@@ -3,7 +3,7 @@
 ![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)
 ![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-Web%20App-5C2D91?logo=dotnet)
 ![SQL Server](https://img.shields.io/badge/Database-SQL%20Server-CC2927?logo=microsoftsqlserver)
-![Tests](https://img.shields.io/badge/Tests-14%20passing-2EA44F)
+![Tests](https://img.shields.io/badge/Tests-23%20passing-2EA44F)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-1F6FEB)
 
 TheCertMaster-CustomQuizs is a .NET 9 quiz platform for building, importing, managing, and delivering custom quizzes through a single ASP.NET Core application. It combines a JSON API, browser-based pages, admin tooling, question editing, custom quiz creation, reporting, and a pre-employment assessment flow in one deployable site.
@@ -19,7 +19,7 @@ It supports:
 - quiz imports with uploaded media
 - admin-side question editing with pagination
 - custom quiz creation from selected questions in "Basic" quizzes
-- pre-employment assessment configuration, generation, submissions, and notifications
+- pre-employment assessment configuration, exact-question selection, generation, submissions, and notifications
 
 ## Screenshots
 
@@ -50,7 +50,7 @@ It supports:
 - Import quiz packages and uploaded images
 - Edit existing questions directly from the management panel
 - Build new custom quizzes from selected source questions
-- Run pre-employment assessments with configurable quiz selection and question counts
+- Run pre-employment assessments with configurable source exams, random question counts, or administrator-selected exact questions
 - Access Swagger/OpenAPI during development
 
 ## Main Pages
@@ -198,7 +198,8 @@ Important:
 - edit `production-settings.template.psd1` before install
 - the packaged seeded admin account email is `admin@quizapi.local`
 - leave `BootstrapAdminPassword` blank to auto-generate a strong temporary install/configuration password, or set one explicitly if needed
-- change the `admin@quizapi.local` password again after setup and configuration are complete
+- on first packaged startup, the app rotates `admin@quizapi.local` only when that account is still using the packaged default password
+- change the `admin@quizapi.local` password again after setup and configuration are complete; later restarts will not revert a user-changed password back to the generated install password
 - full setting guidance is in `Documentation/ProductionSettingsReference.md`
 
 ### Post-Deploy Smoke Tests
@@ -359,6 +360,13 @@ Or build the IIS deployment bundle:
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-IISPackage.ps1
 ```
 
+The script writes the release zip under the project `DeploymentBundle\` folder. For upload/testing handoff, copy the same zip to the sibling bundle folder used by this workspace:
+
+```powershell
+New-Item -ItemType Directory -Force -Path F:\repos\DeploymentBundle | Out-Null
+Copy-Item .\DeploymentBundle\TheCertMaster-CustomQuizs-release-bundle-*.zip F:\repos\DeploymentBundle\ -Force
+```
+
 ### 8. Create the IIS Site
 
 In IIS:
@@ -453,6 +461,7 @@ In the current local setup:
 - if you are using an existing database, verify schema and migration history carefully before enabling auto-migration
 - standard packaged installs restore the seeded database and keep `admin@quizapi.local` as the bootstrap admin email
 - if `BootstrapAdminPassword` is left blank, the installer generates a strong temporary install/configuration password and shows it in the summary
+- startup only rotates `admin@quizapi.local` when it is still using the packaged default password, so a password changed through the application is preserved across later restarts
 - change the `admin@quizapi.local` password again after setup and configuration are complete
 
 ## Testing
@@ -463,7 +472,7 @@ Run the automated tests with:
 dotnet test QuizAPI.sln -c Release
 ```
 
-The test suite covers key flows such as imports, mixed quiz generation, pre-employment configuration and submissions, and admin editing workflows.
+The test suite covers key flows such as imports, mixed quiz generation, quiz submit completion behavior, pre-employment random and exact-question configuration, submissions, and admin editing workflows.
 
 ## Repository Layout
 
@@ -488,6 +497,9 @@ QuizAPI.Tests/      Integration and end-to-end flow tests
 - Quiz package image uploads are limited to PNG, JPG/JPEG, GIF, and WebP. SVG is rejected, and package uploads are checked for compressed size, entry count, total uncompressed size, per-image size, and image file signatures before public extraction.
 - Anonymous pre-employment quiz generation and submission endpoints are rate-limited by remote IP. Production defaults are in `appsettings.Production.json` under `RateLimiting:PreEmployment`.
 - Pre-employment setup can require an optional access code / link token. Candidate links may include `/preemployment.html?code=...`; anonymous config responses only show whether a code is required, not the configured code.
+- Pre-employment setup can either pull a random count from each selected source exam or use the specific questions selected by an administrator from the source-exam question picker.
+- After a quiz is submitted, the question and answer controls are removed from the active runner view so only restart/new-quiz actions remain available.
+- The shared dark UI stylesheet is `wwwroot/styles/dark-theme.css`.
 
 ## Documentation
 

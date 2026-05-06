@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quiz Selector</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <link rel="stylesheet" href="/styles/dark-theme.css" />
     <style>
         :root {
             --bg: #f3f6f9;
@@ -369,6 +369,8 @@
         let sessionKey = '';
         let saveHandle = null;
         let suppressSave = false;
+        let isSubmitting = false;
+        let quizFinished = false;
         const selections = new Map();
 
         function setStatus(msg) { status.textContent = msg; }
@@ -523,13 +525,13 @@
         }
 
         function queueProgressSave() {
-            if (!quizDto || !getToken() || suppressSave) return;
+            if (!quizDto || !getToken() || suppressSave || quizFinished) return;
             if (saveHandle) clearTimeout(saveHandle);
             saveHandle = setTimeout(() => { saveProgress().catch(() => {}); }, 350);
         }
 
         async function saveProgress() {
-            if (!quizDto || !getToken() || suppressSave) return;
+            if (!quizDto || !getToken() || suppressSave || quizFinished) return;
 
             await api.saveProgress({
                 SessionKey: sessionKey,
@@ -574,6 +576,11 @@
             timerPill.style.display = 'inline-block';
 
             const tick = () => {
+                if (quizFinished) {
+                    stopTimer();
+                    return;
+                }
+
                 const mm = Math.floor(timerSeconds / 60);
                 const ss = timerSeconds % 60;
                 timerPill.textContent = `Time: ${mm}:${ss.toString().padStart(2, '0')}`;
@@ -590,6 +597,10 @@
         }
 
         function renderQuestion() {
+            if (quizFinished) {
+                return;
+            }
+
             if (!quizDto || !quizDto.questions || quizDto.questions.length === 0) {
                 questionArea.innerHTML = '<div class="muted">No questions found for this quiz.</div>';
                 return;
@@ -597,6 +608,8 @@
 
             const q = quizDto.questions[index];
             quizTitle.textContent = quizDto.title || 'Quiz';
+            questionArea.style.display = 'block';
+            qCounter.style.display = 'inline-block';
             qCounter.textContent = `Question ${index + 1} of ${quizDto.questions.length}`;
 
             const selected = ensureSet(q.id);
@@ -638,6 +651,8 @@
             const inputs = questionArea.querySelectorAll(`input[name="${groupName}"]`);
             inputs.forEach(inp => {
                 inp.addEventListener('change', () => {
+                    if (quizFinished) return;
+
                     if (!q.allowMultiple) {
                         selected.clear();
                         selected.add(inp.value);
@@ -651,9 +666,44 @@
 
             btnPrev.disabled = index === 0;
             btnNext.disabled = index === quizDto.questions.length - 1;
+            btnSubmit.disabled = isSubmitting;
+        }
+
+        function resetQuizState() {
+            isSubmitting = false;
+            quizFinished = false;
+            suppressSave = false;
+            btnPrev.disabled = false;
+            btnNext.disabled = false;
+            btnSubmit.disabled = false;
+            questionArea.style.display = 'block';
+            qCounter.style.display = 'inline-block';
+        }
+
+        function markQuizFinished() {
+            quizFinished = true;
+            isSubmitting = false;
+            suppressSave = true;
+            stopTimer();
+            if (saveHandle) {
+                clearTimeout(saveHandle);
+                saveHandle = null;
+            }
+
+            btnPrev.disabled = true;
+            btnNext.disabled = true;
+            btnSubmit.disabled = true;
+            btnRestart.disabled = false;
+            btnNewQuiz.disabled = false;
+
+            questionArea.innerHTML = '';
+            questionArea.style.display = 'none';
+            qCounter.style.display = 'none';
+            timerPill.style.display = 'none';
         }
 
         async function loadQuiz(quizId) {
+            resetQuizState();
             setStatus('Loading quiz...');
             resultCard.style.display = 'none';
             perQuestion.innerHTML = '';
@@ -684,6 +734,7 @@
         }
 
         async function loadConfiguredQuiz(config) {
+            resetQuizState();
             setStatus('Building configured quiz...');
             resultCard.style.display = 'none';
             perQuestion.innerHTML = '';
@@ -736,6 +787,8 @@
                 }
 
                 suppressSave = true;
+                isSubmitting = false;
+                quizFinished = false;
                 quizDto = normalizeQuiz(progress.quiz);
                 currentQuizId = progress.quizId || null;
                 launchConfig = progress.launchMode === 'selection'
@@ -783,8 +836,10 @@
         }
 
         async function submitQuiz() {
-            if (!quizDto) return;
+            if (!quizDto || isSubmitting || quizFinished) return;
 
+            isSubmitting = true;
+            btnSubmit.disabled = true;
             setStatus('Submitting attempt...');
             try {
                 const payload = buildSubmitPayload();
@@ -792,7 +847,7 @@
                     ? await api.submitSelection(payload)
                     : await api.submit(currentQuizId, payload);
 
-                stopTimer();
+                markQuizFinished();
 
                 const pct = res.ScorePercent ?? res.scorePercent ?? 0;
                 const cc = res.CorrectCount ?? res.correctCount ?? 0;
@@ -838,9 +893,10 @@
 
                 perQuestion.innerHTML = blocks;
                 resultCard.style.display = 'block';
-                btnNewQuiz.disabled = false;
                 setStatus('');
             } catch {
+                isSubmitting = false;
+                btnSubmit.disabled = false;
                 setStatus('Submit failed. Check the API and server logs.');
             }
         }
@@ -866,6 +922,7 @@
         });
 
         btnRestart.addEventListener('click', () => {
+            resetQuizState();
             if (launchConfig) {
                 loadConfiguredQuiz(launchConfig);
                 return;
@@ -896,6 +953,7 @@
             quizDto = null;
             index = 0;
             timerSeconds = 0;
+            resetQuizState();
             selections.clear();
             resultCard.style.display = 'none';
             quizCard.style.display = 'none';

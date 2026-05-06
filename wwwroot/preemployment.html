@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pre-Employment Quiz</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <link rel="stylesheet" href="/styles/dark-theme.css" />
     <style>
         :root {
             --bg: #f3f6f9;
@@ -291,6 +291,7 @@
             quizIds: [],
             quizTitle: null,
             quizTitles: [],
+            questionIds: [],
             timeLimitMinutes: 0,
             passingScorePercent: 70,
             randomizeAnswers: true,
@@ -426,8 +427,11 @@
             const selectedQuizIds = Array.isArray(config.quizIds) && config.quizIds.length
                 ? config.quizIds
                 : (config.quizId ? [config.quizId] : []);
+            const selectedQuestionIds = Array.isArray(config.questionIds)
+                ? config.questionIds.filter(Boolean)
+                : [];
 
-            if (!selectedQuizIds.length) {
+            if (!selectedQuizIds.length && !selectedQuestionIds.length) {
                 setStatus('This page has not been configured yet. Please contact an administrator.');
                 return;
             }
@@ -442,11 +446,14 @@
                 return;
             }
 
-            const desired = Math.min(Number(config.questionCount || 20), Number(config.maxQuestionCount || 20));
+            const desired = selectedQuestionIds.length
+                ? selectedQuestionIds.length
+                : Math.min(Number(config.questionCount || 20), Number(config.maxQuestionCount || 20));
 
             try {
                 const res = await api.generate({
                     QuizIds: selectedQuizIds,
+                    QuestionIds: selectedQuestionIds,
                     QuestionCount: desired,
                     Title: config.title,
                     AccessCode: accessCode.value.trim()
@@ -539,17 +546,24 @@
             const selectedTitles = Array.isArray(config.quizTitles) && config.quizTitles.length
                 ? config.quizTitles
                 : (config.quizTitle ? [config.quizTitle] : []);
+            const selectedQuestionIds = Array.isArray(config.questionIds)
+                ? config.questionIds.filter(Boolean)
+                : [];
             const totalQuestions = selectedTitles.length ? desired * selectedTitles.length : desired;
-            countPill.textContent = selectedTitles.length
+            countPill.textContent = selectedQuestionIds.length
+                ? `${selectedQuestionIds.length} selected question${selectedQuestionIds.length === 1 ? '' : 's'}`
+                : selectedTitles.length
                 ? `${desired} per selected exam • ${totalQuestions} total`
                 : `${desired} per selected exam`;
             sourceQuizLine.textContent = selectedTitles.length
                 ? `Selected source exams: ${selectedTitles.join(', ')}`
                 : 'Selected source exams: not configured';
-            setupDescription.textContent = selectedTitles.length
+            setupDescription.textContent = selectedQuestionIds.length
+                ? 'This quiz is configured by an administrator and uses specific questions selected from the source exams.'
+                : selectedTitles.length
                 ? 'This quiz is configured by an administrator and pulls the saved number of random questions from each selected source exam.'
                 : 'This quiz has not been configured yet. An administrator needs to choose at least one source exam first.';
-            btnStart.disabled = selectedTitles.length === 0;
+            btnStart.disabled = selectedTitles.length === 0 && selectedQuestionIds.length === 0;
         }
 
         async function init() {
@@ -557,7 +571,10 @@
             const selectedTitles = Array.isArray(config.quizTitles) && config.quizTitles.length
                 ? config.quizTitles
                 : (config.quizTitle ? [config.quizTitle] : []);
-            setStatus(selectedTitles.length ? '' : 'Pre-employment quiz is not configured yet.');
+            const selectedQuestionIds = Array.isArray(config.questionIds)
+                ? config.questionIds.filter(Boolean)
+                : [];
+            setStatus(selectedTitles.length || selectedQuestionIds.length ? '' : 'Pre-employment quiz is not configured yet.');
         }
 
         init();

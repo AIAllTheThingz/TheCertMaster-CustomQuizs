@@ -355,6 +355,113 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
     }
 
     [Fact]
+    public async Task PreEmployment_Config_Can_Use_Specific_Selected_Questions()
+    {
+        await _factory.InitializeAsync();
+
+        Guid quizId1;
+        Guid quizId2;
+        Guid selectedQuestionId1;
+        Guid selectedQuestionId2;
+        const string selectedText1 = "Networking Specific Question 2";
+        const string selectedText2 = "Systems Specific Question 1";
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<QuizDbContext>();
+            db.Images.RemoveRange(db.Images);
+            db.Answers.RemoveRange(db.Answers);
+            db.Questions.RemoveRange(db.Questions);
+            db.Quizzes.RemoveRange(db.Quizzes);
+
+            var quiz1 = new Quiz
+            {
+                Title = "Basic Networking N10-009",
+                Category = "Networking",
+                Questions = Enumerable.Range(1, 3).Select(i => new Question
+                {
+                    Text = $"Networking Specific Question {i}",
+                    AllowMultiple = false,
+                    Answers = new List<Answer>
+                    {
+                        new() { Text = $"Correct {i}", IsCorrect = true },
+                        new() { Text = $"Wrong {i}", IsCorrect = false }
+                    }
+                }).ToList()
+            };
+
+            var quiz2 = new Quiz
+            {
+                Title = "Basic Systems",
+                Category = "Systems",
+                Questions = Enumerable.Range(1, 3).Select(i => new Question
+                {
+                    Text = $"Systems Specific Question {i}",
+                    AllowMultiple = false,
+                    Answers = new List<Answer>
+                    {
+                        new() { Text = $"Correct {i}", IsCorrect = true },
+                        new() { Text = $"Wrong {i}", IsCorrect = false }
+                    }
+                }).ToList()
+            };
+
+            db.Quizzes.AddRange(quiz1, quiz2);
+            await db.SaveChangesAsync();
+
+            quizId1 = quiz1.Id;
+            quizId2 = quiz2.Id;
+            selectedQuestionId1 = quiz1.Questions.Single(q => q.Text == selectedText1).Id;
+            selectedQuestionId2 = quiz2.Questions.Single(q => q.Text == selectedText2).Id;
+        }
+
+        using var client = _factory.CreateClient();
+        var token = await LoginAsAdminAsync(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var saveResponse = await client.PostAsJsonAsync("/api/preemployment/config", new
+        {
+            Title = "Targeted Hiring Assessment",
+            QuizIds = new[] { quizId1, quizId2 },
+            QuestionIds = new[] { selectedQuestionId1, selectedQuestionId2 },
+            QuestionCount = 1,
+            RandomizeAnswers = true,
+            ShowCorrectAnswersAtEnd = false
+        });
+        Assert.Equal(HttpStatusCode.OK, saveResponse.StatusCode);
+
+        var saved = await saveResponse.Content.ReadFromJsonAsync<PreEmploymentConfigResponse>(_jsonOptions);
+        Assert.NotNull(saved);
+        Assert.Equal(2, saved!.QuestionCount);
+        Assert.Equal(new[] { selectedQuestionId1, selectedQuestionId2 }, saved.QuestionIds);
+        Assert.Contains(saved.SelectedQuestions, q => q.QuestionId == selectedQuestionId1 && q.QuestionText == selectedText1);
+        Assert.Contains(saved.SelectedQuestions, q => q.QuestionId == selectedQuestionId2 && q.QuestionText == selectedText2);
+
+        client.DefaultRequestHeaders.Authorization = null;
+
+        var loaded = await client.GetFromJsonAsync<PreEmploymentConfigResponse>("/api/preemployment/config", _jsonOptions);
+        Assert.NotNull(loaded);
+        Assert.Equal(new[] { selectedQuestionId1, selectedQuestionId2 }, loaded!.QuestionIds);
+
+        using var generateResponse = await client.PostAsJsonAsync("/api/preemployment/generate", new
+        {
+            QuizIds = loaded.QuizIds,
+            QuestionIds = loaded.QuestionIds,
+            QuestionCount = loaded.QuestionCount,
+            Title = loaded.Title
+        });
+        Assert.Equal(HttpStatusCode.OK, generateResponse.StatusCode);
+
+        var generated = await generateResponse.Content.ReadFromJsonAsync<PreEmploymentQuizResponse>(_jsonOptions);
+        Assert.NotNull(generated);
+        Assert.Equal(2, generated!.QuestionCount);
+        Assert.Equal(2, generated.Questions.Count);
+        Assert.All(generated.Questions, q => Assert.Contains(q.QuestionId, new[] { selectedQuestionId1, selectedQuestionId2 }));
+        Assert.Contains(generated.Questions, q => q.Text == selectedText1);
+        Assert.Contains(generated.Questions, q => q.Text == selectedText2);
+    }
+
+    [Fact]
     public async Task PreEmployment_Access_Code_Is_Required_When_Configured_And_Not_Leaked_Publicly()
     {
         await _factory.InitializeAsync();
@@ -1596,9 +1703,18 @@ public sealed class ImportPackageFlowTests : IClassFixture<QuizApiApplicationFac
         public List<Guid> QuizIds { get; set; } = new();
         public string QuizTitle { get; set; } = string.Empty;
         public List<string> QuizTitles { get; set; } = new();
+        public List<Guid> QuestionIds { get; set; } = new();
+        public List<SelectedQuestionResponse> SelectedQuestions { get; set; } = new();
         public int QuestionCount { get; set; }
         public bool AccessCodeRequired { get; set; }
         public string? AccessCode { get; set; }
+    }
+
+    private sealed class SelectedQuestionResponse
+    {
+        public Guid QuestionId { get; set; }
+        public string QuizTitle { get; set; } = string.Empty;
+        public string QuestionText { get; set; } = string.Empty;
     }
 
     private sealed class PreEmploymentQuizResponse

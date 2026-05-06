@@ -112,6 +112,21 @@ namespace QuizAPI.Services
                     .Select(title => title.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList(),
+                QuestionIds = (source.QuestionIds ?? new List<Guid>())
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList(),
+                SelectedQuestions = (source.SelectedQuestions ?? new List<QuizCreatorSelectedQuestionDto>())
+                    .Where(item => item.QuestionId != Guid.Empty)
+                    .GroupBy(item => item.QuestionId)
+                    .Select(group => group.First())
+                    .Select(item => new QuizCreatorSelectedQuestionDto
+                    {
+                        QuestionId = item.QuestionId,
+                        QuizTitle = string.IsNullOrWhiteSpace(item.QuizTitle) ? string.Empty : item.QuizTitle.Trim(),
+                        QuestionText = string.IsNullOrWhiteSpace(item.QuestionText) ? string.Empty : item.QuestionText.Trim()
+                    })
+                    .ToList(),
                 QuestionCount = questionCount,
                 MaxQuestionCount = maxQuestionCount,
                 TimeLimitMinutes = Math.Max(0, source.TimeLimitMinutes),

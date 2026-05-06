@@ -439,7 +439,7 @@ using (var scope = app.Services.CreateScope())
                 }
             }
             else if (isPackagedSeedAdmin
-                && !await userManager.CheckPasswordAsync(bootstrapAdmin, bootstrapAdminPassword))
+                && await userManager.CheckPasswordAsync(bootstrapAdmin, packagedSeedAdminPassword))
             {
                 var resetToken = await userManager.GeneratePasswordResetTokenAsync(bootstrapAdmin);
                 var resetPasswordResult = await userManager.ResetPasswordAsync(bootstrapAdmin, resetToken, bootstrapAdminPassword);

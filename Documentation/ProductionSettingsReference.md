@@ -139,7 +139,7 @@ powershell.exe -ExecutionPolicy Bypass -File C:\repo\TheCertMaster-CustomQuizs\s
 `BootstrapAdminPassword`
 - Purpose: Fallback local administrator account password.
 - Required: Yes for packaged installs
-- Notes: Leave this blank to let the installer generate a strong temporary install/configuration password and print it in the install summary. You can also set it explicitly. The installer rejects the packaged default password, and the application rotates the packaged seeded admin account to the configured bootstrap password whenever that seeded admin is out of sync with it.
+- Notes: Leave this blank to let the installer generate a strong temporary install/configuration password and print it in the install summary. You can also set it explicitly. The installer rejects the packaged default password, and the application rotates the packaged seeded admin account to the configured bootstrap password only when that account is still using the packaged default password.
 
 `BootstrapAdminFirstName`
 - Purpose: Display/profile first name for the fallback admin.
@@ -157,9 +157,9 @@ When `RestoreSeedDatabase = $true`, the packaged database already contains a loc
 
 - Email: `admin@quizapi.local`
 
-Leave `BootstrapAdminPassword` blank to let the installer generate a strong temporary install/configuration password, or set it explicitly if your rollout requires that. During startup, the app rotates the packaged seeded admin account to the configured bootstrap password whenever the seeded admin is out of sync with it.
+Leave `BootstrapAdminPassword` blank to let the installer generate a strong temporary install/configuration password, or set it explicitly if your rollout requires that. During startup, the app rotates the packaged seeded admin account to the configured bootstrap password only when the seeded admin is still using the packaged default password.
 
-After installation and configuration are complete, change the `admin@quizapi.local` password again to a final long-term credential.
+After installation and configuration are complete, change the `admin@quizapi.local` password again to a final long-term credential. Later restarts preserve that user-changed password instead of reverting it to the generated install password.
 
 If you change `BootstrapAdminEmail` to something else, the installer will try to let the application create that account during startup. If that requested account does not appear after deployment, the install fails instead of silently falling back to the seeded admin.
 
@@ -228,7 +228,7 @@ Anonymous pre-employment quiz generation and submission are rate-limited by remo
 - `LoopbackPermitLimit`: higher local-server allowance for smoke tests and local validation.
 - `WindowMinutes`: fixed-window length in minutes.
 
-The pre-employment setup screen also supports an optional access code / link token. If it is set, candidates must enter that code or open a link such as `/preemployment.html?code=your-code` before generation/submission succeeds. Anonymous config responses only reveal whether a code is required; they do not return the configured code. Candidate submissions and completion emails also have short duplicate throttles to reduce accidental double-submits and email bursts.
+The pre-employment setup screen also supports an optional access code / link token. If it is set, candidates must enter that code or open a link such as `/preemployment.html?code=your-code` before generation/submission succeeds. Anonymous config responses only reveal whether a code is required; they do not return the configured code. The setup can use either random questions from selected source exams or exact administrator-selected questions from those exams. Candidate submissions and completion emails also have short duplicate throttles to reduce accidental double-submits and email bursts.
 
 Quiz package uploads are also bounded before extraction. ZIP uploads are limited to 50 MB compressed, 250 files, 150 MB total uncompressed content, 200 images, 25 MB CSV, and 10 MB per image. Supported extracted image types are PNG, JPG/JPEG, GIF, and WebP; SVG is rejected.
 

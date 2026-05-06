@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <title>QuizAPI Management Panel</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/styles/ouhealth-theme.css" />
+    <link rel="stylesheet" href="/styles/dark-theme.css" />
     <style>
         :root {
             --bg: #f3f6f9;
@@ -230,7 +230,7 @@
             border: 1px solid var(--line);
             border-radius: 18px;
             overflow: hidden;
-            background: white;
+            background: var(--panel);
             box-shadow: var(--shadow);
         }
         .swaggerHead {
@@ -246,13 +246,13 @@
             width: 100%;
             height: 78vh;
             border: 0;
-            background: white;
+            background: var(--panel);
         }
         .swaggerDisabled {
             padding: 18px;
             line-height: 1.55;
             color: var(--muted);
-            background: white;
+            background: var(--panel);
         }
     </style>
 </head>
@@ -438,17 +438,66 @@
                 <div>
                     <label>Optional access code / link token</label><br />
                     <input type="text" id="preEmploymentAccessCode" placeholder="Leave blank for public access" style="min-width:260px;" autocomplete="off" />
-                    <div class="muted">If set, candidates must enter this code or use `/preemployment.html?code=...`.</div>
+                    <div class="muted">If set, candidates must enter this code or open a link like <code>/preemployment.html?code=your-code</code>.</div>
                 </div>
                 <div>
                     <label>Source exam titles</label><br />
                     <select id="preEmploymentQuizSelect" multiple required size="7" style="min-width:320px; min-height:220px;">
                     </select>
-                    <div class="muted">Hold `Ctrl` or `Cmd` to select multiple quizzes.</div>
+                    <div class="muted">Hold <kbd>Ctrl</kbd> or <kbd>Cmd</kbd> to select multiple quizzes.</div>
                 </div>
                 <div>
                     <label>Questions per selected source exam</label><br />
                     <input type="number" id="preEmploymentQuestionCount" min="1" value="20" required style="width:140px;" />
+                </div>
+            </div>
+            <div style="margin-top:16px; border:1px solid var(--line); border-radius:16px; padding:14px;">
+                <strong>Specific question selection</strong>
+                <div class="muted" style="margin-top:4px;">Optional. Add exact questions from selected disciplines/source exams. When questions are added here, the candidate quiz uses those questions instead of the random count above.</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-top:12px;">
+                    <div>
+                        <label for="preEmploymentQuestionQuizSelect">Source exam for question picker</label><br />
+                        <select id="preEmploymentQuestionQuizSelect" style="min-width:340px;">
+                            <option value="">Select a source exam</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="preEmploymentQuestionSearch">Search source questions</label><br />
+                        <input id="preEmploymentQuestionSearch" type="text" placeholder="Search question text or answers" style="min-width:340px;" />
+                    </div>
+                    <div>
+                        <button id="preEmploymentQuestionSearchBtn" type="button">Search</button>
+                    </div>
+                    <div>
+                        <button id="preEmploymentQuestionLoadBtn" type="button">Load questions</button>
+                    </div>
+                </div>
+                <div id="preEmploymentQuestionStatus" class="statusBanner warn" style="margin-top:10px; display:none;"></div>
+                <div style="display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(280px, 0.8fr); gap:18px; margin-top:14px; align-items:start;">
+                    <div>
+                        <div class="editorScrollArea">
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align:left; padding:6px; border-bottom:1px solid #ccc;">Available Source Questions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="preEmploymentQuestionTbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="preEmploymentQuestionPager" style="display:none; margin-top:12px; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <button id="preEmploymentQuestionPrevBtn" type="button">Previous</button>
+                            <button id="preEmploymentQuestionNextBtn" type="button">Next</button>
+                            <span class="muted" id="preEmploymentQuestionPageInfo"></span>
+                        </div>
+                    </div>
+                    <div class="editorSidebar" style="border:1px solid var(--line); border-radius:16px; padding:14px;">
+                        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                            <strong>Selected Pre-Employment Questions</strong>
+                            <span class="pill" id="preEmploymentSelectedQuestionCount">0 selected</span>
+                        </div>
+                        <div id="preEmploymentSelectedQuestionList" style="margin-top:12px;"></div>
+                    </div>
                 </div>
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:flex-end;">
@@ -526,6 +575,18 @@ const loginForm = document.getElementById("loginForm");
         const preEmploymentTitle = document.getElementById("preEmploymentTitle");
         const preEmploymentAccessCode = document.getElementById("preEmploymentAccessCode");
         const preEmploymentQuizSelect = document.getElementById("preEmploymentQuizSelect");
+        const preEmploymentQuestionQuizSelect = document.getElementById("preEmploymentQuestionQuizSelect");
+        const preEmploymentQuestionSearch = document.getElementById("preEmploymentQuestionSearch");
+        const preEmploymentQuestionSearchBtn = document.getElementById("preEmploymentQuestionSearchBtn");
+        const preEmploymentQuestionLoadBtn = document.getElementById("preEmploymentQuestionLoadBtn");
+        const preEmploymentQuestionStatus = document.getElementById("preEmploymentQuestionStatus");
+        const preEmploymentQuestionTbody = document.getElementById("preEmploymentQuestionTbody");
+        const preEmploymentQuestionPager = document.getElementById("preEmploymentQuestionPager");
+        const preEmploymentQuestionPageInfo = document.getElementById("preEmploymentQuestionPageInfo");
+        const preEmploymentQuestionPrevBtn = document.getElementById("preEmploymentQuestionPrevBtn");
+        const preEmploymentQuestionNextBtn = document.getElementById("preEmploymentQuestionNextBtn");
+        const preEmploymentSelectedQuestionList = document.getElementById("preEmploymentSelectedQuestionList");
+        const preEmploymentSelectedQuestionCount = document.getElementById("preEmploymentSelectedQuestionCount");
         const preEmploymentQuestionCount = document.getElementById("preEmploymentQuestionCount");
         const preEmploymentTimeLimit = document.getElementById("preEmploymentTimeLimit");
         const preEmploymentPassingScore = document.getElementById("preEmploymentPassingScore");
@@ -623,6 +684,14 @@ const loginForm = document.getElementById("loginForm");
             totalPages: 0
         };
         let quizCreatorState = {
+            quizId: "",
+            search: "",
+            page: 1,
+            pageSize: 10,
+            totalPages: 0,
+            selectedQuestions: []
+        };
+        let preEmploymentQuestionState = {
             quizId: "",
             search: "",
             page: 1,
@@ -1408,6 +1477,18 @@ function getDashboardEls() {
         quizCreatorCategory: document.getElementById("quizCreatorCategory"),
         quizCreatorPassThreshold: document.getElementById("quizCreatorPassThreshold"),
         quizCreatorSaveBtn: document.getElementById("quizCreatorSaveBtn"),
+        preEmploymentQuestionQuizSelect: document.getElementById("preEmploymentQuestionQuizSelect"),
+        preEmploymentQuestionSearch: document.getElementById("preEmploymentQuestionSearch"),
+        preEmploymentQuestionSearchBtn: document.getElementById("preEmploymentQuestionSearchBtn"),
+        preEmploymentQuestionLoadBtn: document.getElementById("preEmploymentQuestionLoadBtn"),
+        preEmploymentQuestionStatus: document.getElementById("preEmploymentQuestionStatus"),
+        preEmploymentQuestionTbody: document.getElementById("preEmploymentQuestionTbody"),
+        preEmploymentQuestionPager: document.getElementById("preEmploymentQuestionPager"),
+        preEmploymentQuestionPageInfo: document.getElementById("preEmploymentQuestionPageInfo"),
+        preEmploymentQuestionPrevBtn: document.getElementById("preEmploymentQuestionPrevBtn"),
+        preEmploymentQuestionNextBtn: document.getElementById("preEmploymentQuestionNextBtn"),
+        preEmploymentSelectedQuestionList: document.getElementById("preEmploymentSelectedQuestionList"),
+        preEmploymentSelectedQuestionCount: document.getElementById("preEmploymentSelectedQuestionCount"),
         refreshHistoryBtn: document.getElementById("refreshHistoryBtn"),
         exportImportHistoryBtn: document.getElementById("exportImportHistoryBtn"),
         historyStatus: document.getElementById("historyStatus"),
@@ -1495,6 +1576,7 @@ async function loadQuizzes() {
         const quizzes = await ApiJson.readJsonNormalized(res);
         cachedQuizzes = Array.isArray(quizzes) ? quizzes : [];
         populatePreEmploymentQuizOptions(cachedQuizzes);
+        populatePreEmploymentQuestionQuizOptions(cachedQuizzes);
         populateQuestionEditorQuizOptions(cachedQuizzes);
         populateQuizCreatorQuizOptions(cachedQuizzes);
 
@@ -1532,6 +1614,7 @@ async function loadQuizzes() {
         setSectionStatus(quizStatus, "error", "Error loading quizzes: " + err.message);
         cachedQuizzes = [];
         populatePreEmploymentQuizOptions([]);
+        populatePreEmploymentQuestionQuizOptions([]);
         populateQuestionEditorQuizOptions([]);
         populateQuizCreatorQuizOptions([]);
     }
@@ -1578,6 +1661,30 @@ function populatePreEmploymentQuizOptions(quizzes) {
     for (const opt of Array.from(preEmploymentQuizSelect.options)) {
         opt.selected = previousValues.includes(opt.value);
     }
+}
+
+function populatePreEmploymentQuestionQuizOptions(quizzes) {
+    if (!preEmploymentQuestionQuizSelect) return;
+
+    const previousValue = preEmploymentQuestionState.quizId || preEmploymentQuestionQuizSelect.value || "";
+    preEmploymentQuestionQuizSelect.innerHTML = '<option value="">Select a source exam</option>';
+
+    for (const q of (quizzes || [])) {
+        const id = q.Id || q.id || "";
+        const title = q.Title || q.title || "(untitled)";
+        const category = q.Category || q.category || "Uncategorized";
+        const count = Number(q.QuestionCount ?? q.questionCount ?? 0);
+        if (!id) continue;
+
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = `${category} - ${title} (${count} questions)`;
+        preEmploymentQuestionQuizSelect.appendChild(opt);
+    }
+
+    preEmploymentQuestionQuizSelect.value = previousValue && Array.from(preEmploymentQuestionQuizSelect.options).some(o => o.value === previousValue)
+        ? previousValue
+        : "";
 }
 
 function populateQuestionEditorQuizOptions(quizzes) {
@@ -1654,6 +1761,127 @@ function renderQuizCreatorSelectedList() {
             <button type="button" data-action="remove-selected-question" data-question-id="${escapeHtmlAttr(item.questionId || "")}" style="margin-top:8px;">Remove</button>
         `;
         quizCreatorSelectedList.appendChild(row);
+    }
+}
+
+function renderPreEmploymentSelectedQuestionList() {
+    if (!preEmploymentSelectedQuestionList || !preEmploymentSelectedQuestionCount) return;
+
+    preEmploymentSelectedQuestionList.innerHTML = "";
+    preEmploymentSelectedQuestionCount.textContent = `${preEmploymentQuestionState.selectedQuestions.length} selected`;
+
+    if (!preEmploymentQuestionState.selectedQuestions.length) {
+        preEmploymentSelectedQuestionList.innerHTML = '<div class="muted">No specific questions selected. The setup will use random questions from the selected source exams.</div>';
+        return;
+    }
+
+    for (const item of preEmploymentQuestionState.selectedQuestions) {
+        const row = document.createElement("div");
+        row.style.padding = "10px 0";
+        row.style.borderBottom = "1px solid rgba(238, 208, 151, 0.14)";
+        row.innerHTML = `
+            <div><strong>${escapeHtml(item.quizTitle || "")}</strong></div>
+            <div class="muted" style="margin-top:4px;">${escapeHtml(item.questionText || "")}</div>
+            <button type="button" data-action="remove-preemployment-question" data-question-id="${escapeHtmlAttr(item.questionId || "")}" style="margin-top:8px;">Remove</button>
+        `;
+        preEmploymentSelectedQuestionList.appendChild(row);
+    }
+}
+
+function renderPreEmploymentQuestionTable(pageData) {
+    if (!preEmploymentQuestionTbody || !preEmploymentQuestionStatus || !preEmploymentQuestionPager || !preEmploymentQuestionPageInfo || !preEmploymentQuestionPrevBtn || !preEmploymentQuestionNextBtn) {
+        return;
+    }
+
+    preEmploymentQuestionTbody.innerHTML = "";
+
+    const items = Array.isArray(pageData.items) ? pageData.items : [];
+    preEmploymentQuestionState.totalPages = Number(pageData.totalPages ?? 0);
+    preEmploymentQuestionState.page = Number(pageData.page ?? 1);
+
+    if (!items.length) {
+        setSectionStatus(preEmploymentQuestionStatus, "warn", "No source questions found for this source exam.");
+        preEmploymentQuestionPager.style.display = "none";
+        return;
+    }
+
+    setSectionStatus(preEmploymentQuestionStatus, "ok", `Loaded ${items.length} source question(s) on page ${preEmploymentQuestionState.page} of ${preEmploymentQuestionState.totalPages || 1}.`);
+    preEmploymentQuestionPager.style.display = "flex";
+    preEmploymentQuestionPageInfo.textContent = `Page ${preEmploymentQuestionState.page} of ${preEmploymentQuestionState.totalPages || 1}`;
+    preEmploymentQuestionPrevBtn.disabled = preEmploymentQuestionState.page <= 1;
+    preEmploymentQuestionNextBtn.disabled = preEmploymentQuestionState.totalPages <= 0 || preEmploymentQuestionState.page >= preEmploymentQuestionState.totalPages;
+
+    for (const item of items) {
+        const questionId = item.questionId || "";
+        const quizId = item.quizId || preEmploymentQuestionState.quizId || "";
+        const quizTitle = item.quizTitle || "";
+        const questionText = item.questionText || "";
+        const answers = Array.isArray(item.answers) ? item.answers : [];
+        const alreadySelected = preEmploymentQuestionState.selectedQuestions.some(q => q.questionId === questionId);
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="padding:12px 6px; border-bottom:1px solid #eee; vertical-align:top;">
+                <div><strong>${escapeHtml(quizTitle)}</strong></div>
+                <div style="margin-top:6px;">${escapeHtml(questionText)}</div>
+                <div class="muted" style="margin-top:8px;">${answers.map(a => `${a.isCorrect ? "[Correct]" : "[Answer]"} ${escapeHtml(a.answerText || "")}`).join("<br />")}</div>
+                <button type="button" data-action="add-preemployment-question" data-question-id="${escapeHtmlAttr(questionId)}" data-quiz-id="${escapeHtmlAttr(quizId)}" data-quiz-title="${escapeHtmlAttr(quizTitle)}" data-question-text="${escapeHtmlAttr(questionText)}" style="margin-top:10px;" ${alreadySelected ? "disabled" : ""}>${alreadySelected ? "Added" : "Add question"}</button>
+            </td>
+        `;
+        preEmploymentQuestionTbody.appendChild(tr);
+    }
+}
+
+async function loadPreEmploymentQuestionPage(page = 1) {
+    if (!preEmploymentQuestionQuizSelect || !preEmploymentQuestionSearch || !preEmploymentQuestionStatus || !preEmploymentQuestionTbody || !preEmploymentQuestionPager) return;
+
+    preEmploymentQuestionState.quizId = preEmploymentQuestionQuizSelect.value || "";
+    preEmploymentQuestionState.search = (preEmploymentQuestionSearch.value || "").trim();
+    preEmploymentQuestionState.page = page;
+
+    if (!token) {
+        setSectionStatus(preEmploymentQuestionStatus, "warn", "Login required.");
+        return;
+    }
+
+    if (!preEmploymentQuestionState.quizId) {
+        preEmploymentQuestionTbody.innerHTML = "";
+        preEmploymentQuestionPager.style.display = "none";
+        setSectionStatus(preEmploymentQuestionStatus, "warn", "Choose a source exam to load questions.");
+        return;
+    }
+
+    setSectionStatus(preEmploymentQuestionStatus, "warn", "Loading source questions...");
+    preEmploymentQuestionTbody.innerHTML = "";
+    preEmploymentQuestionPager.style.display = "none";
+
+    try {
+        const params = new URLSearchParams({
+            quizId: preEmploymentQuestionState.quizId,
+            page: String(page),
+            pageSize: String(preEmploymentQuestionState.pageSize),
+            search: preEmploymentQuestionState.search
+        });
+
+        const res = await fetch("/api/admin/question-editor?" + params.toString(), {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (res.status === 401) {
+            handleUnauthorizedAdminSession("Your admin session expired while loading pre-employment source questions. Please log in again.");
+            return;
+        }
+
+        if (!res.ok) {
+            const text = await readResponseMessage(res);
+            setSectionStatus(preEmploymentQuestionStatus, "error", "Failed to load source questions: " + (text || res.status));
+            return;
+        }
+
+        const pageData = await ApiJson.readJsonNormalized(res);
+        renderPreEmploymentQuestionTable(pageData);
+    } catch (err) {
+        setSectionStatus(preEmploymentQuestionStatus, "error", "Error loading source questions: " + err.message);
     }
 }
 
@@ -2042,9 +2270,21 @@ async function loadPreEmploymentConfig() {
             ? cfg.quizTitles
             : (cfg.quizTitle ? [cfg.quizTitle] : []);
 
+        preEmploymentQuestionState.selectedQuestions = Array.isArray(cfg.selectedQuestions)
+            ? cfg.selectedQuestions.map(q => ({
+                questionId: q.questionId || q.QuestionId || "",
+                quizTitle: q.quizTitle || q.QuizTitle || "",
+                questionText: q.questionText || q.QuestionText || ""
+            })).filter(q => q.questionId)
+            : [];
+        renderPreEmploymentSelectedQuestionList();
+
         const loadedCount = Number(cfg.questionCount || 20);
         const loadedTotal = selectedTitles.length ? loadedCount * selectedTitles.length : loadedCount;
-        setSectionStatus(preEmploymentStatus, "ok", selectedTitles.length
+        const exactQuestionCount = preEmploymentQuestionState.selectedQuestions.length;
+        setSectionStatus(preEmploymentStatus, "ok", exactQuestionCount > 0
+            ? `Loaded. Current setup uses ${exactQuestionCount} specifically selected question(s) from ${selectedTitles.join(", ") || "the selected source exams"}.`
+            : selectedTitles.length
             ? `Loaded. Current source exams: ${selectedTitles.join(", ")}. Saved count is ${loadedCount} per exam (${loadedTotal} total).`
             : "Loaded. Select at least one source exam and save.");
     } catch (err) {
@@ -2057,8 +2297,15 @@ async function savePreEmploymentConfig() {
     if (!token) return;
 
     const quizIds = Array.from(preEmploymentQuizSelect.selectedOptions).map(o => o.value);
-    if (!quizIds.length) {
-        setSectionStatus(preEmploymentStatus, "warn", "Choose at least one source exam title first.");
+    const selectedQuestions = preEmploymentQuestionState.selectedQuestions
+        .filter(q => q.questionId)
+        .map(q => ({
+            questionId: q.questionId,
+            quizTitle: q.quizTitle || "",
+            questionText: q.questionText || ""
+        }));
+    if (!quizIds.length && !selectedQuestions.length) {
+        setSectionStatus(preEmploymentStatus, "warn", "Choose at least one source exam or add specific questions first.");
         return;
     }
 
@@ -2066,6 +2313,8 @@ async function savePreEmploymentConfig() {
         title: (preEmploymentTitle.value || "").trim(),
         accessCode: preEmploymentAccessCode ? (preEmploymentAccessCode.value || "").trim() : "",
         quizIds,
+        questionIds: selectedQuestions.map(q => q.questionId),
+        selectedQuestions,
         questionCount: parseInt(preEmploymentQuestionCount.value || "0", 10),
         timeLimitMinutes: parseInt(preEmploymentTimeLimit.value || "0", 10),
         passingScorePercent: parseFloat(preEmploymentPassingScore.value || "0"),
@@ -2093,12 +2342,23 @@ async function savePreEmploymentConfig() {
 
         const saved = await ApiJson.readJsonNormalized(res);
         preEmploymentQuestionCount.value = saved.questionCount || payload.questionCount;
+        preEmploymentQuestionState.selectedQuestions = Array.isArray(saved.selectedQuestions)
+            ? saved.selectedQuestions.map(q => ({
+                questionId: q.questionId || q.QuestionId || "",
+                quizTitle: q.quizTitle || q.QuizTitle || "",
+                questionText: q.questionText || q.QuestionText || ""
+            })).filter(q => q.questionId)
+            : [];
+        renderPreEmploymentSelectedQuestionList();
         const savedTitles = Array.isArray(saved.quizTitles) && saved.quizTitles.length
             ? saved.quizTitles
             : (saved.quizTitle ? [saved.quizTitle] : []);
         const savedPerQuizCount = Number(saved.questionCount || payload.questionCount || 0);
         const savedTotal = savedTitles.length ? savedPerQuizCount * savedTitles.length : savedPerQuizCount;
-        setSectionStatus(preEmploymentStatus, "ok", savedTitles.length
+        const exactQuestionCount = preEmploymentQuestionState.selectedQuestions.length;
+        setSectionStatus(preEmploymentStatus, "ok", exactQuestionCount > 0
+            ? `Saved. Pre-employment quiz now uses ${exactQuestionCount} specifically selected question(s) from ${savedTitles.join(", ") || "the selected source exams"}.`
+            : savedTitles.length
             ? `Saved. Pre-employment quiz now pulls ${savedPerQuizCount} random question(s) from each selected exam in ${savedTitles.join(", ")} (${savedTotal} total).`
             : "Saved.");
     } catch (err) {
@@ -2295,6 +2555,14 @@ function wireDashboardButtonsOnce() {
         quizCreatorTbody,
         quizCreatorSelectedList,
         quizCreatorSaveBtn,
+        preEmploymentQuestionQuizSelect,
+        preEmploymentQuestionSearch,
+        preEmploymentQuestionSearchBtn,
+        preEmploymentQuestionLoadBtn,
+        preEmploymentQuestionPrevBtn,
+        preEmploymentQuestionNextBtn,
+        preEmploymentQuestionTbody,
+        preEmploymentSelectedQuestionList,
         refreshHistoryBtn,
         exportImportHistoryBtn,
         refreshUsageBtn,
@@ -2441,6 +2709,88 @@ function wireDashboardButtonsOnce() {
     if (quizCreatorSaveBtn && !quizCreatorSaveBtn.dataset.wired) {
         quizCreatorSaveBtn.dataset.wired = "1";
         quizCreatorSaveBtn.addEventListener("click", () => createQuizFromSelectedQuestions());
+    }
+
+    if (preEmploymentQuestionQuizSelect && !preEmploymentQuestionQuizSelect.dataset.wired) {
+        preEmploymentQuestionQuizSelect.dataset.wired = "1";
+        preEmploymentQuestionQuizSelect.addEventListener("change", () => loadPreEmploymentQuestionPage(1));
+    }
+
+    if (preEmploymentQuestionLoadBtn && !preEmploymentQuestionLoadBtn.dataset.wired) {
+        preEmploymentQuestionLoadBtn.dataset.wired = "1";
+        preEmploymentQuestionLoadBtn.addEventListener("click", () => loadPreEmploymentQuestionPage(preEmploymentQuestionState.page || 1));
+    }
+
+    if (preEmploymentQuestionSearch && !preEmploymentQuestionSearch.dataset.wired) {
+        preEmploymentQuestionSearch.dataset.wired = "1";
+        preEmploymentQuestionSearch.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                loadPreEmploymentQuestionPage(1);
+            }
+        });
+    }
+
+    if (preEmploymentQuestionSearchBtn && !preEmploymentQuestionSearchBtn.dataset.wired) {
+        preEmploymentQuestionSearchBtn.dataset.wired = "1";
+        preEmploymentQuestionSearchBtn.addEventListener("click", () => loadPreEmploymentQuestionPage(1));
+    }
+
+    if (preEmploymentQuestionPrevBtn && !preEmploymentQuestionPrevBtn.dataset.wired) {
+        preEmploymentQuestionPrevBtn.dataset.wired = "1";
+        preEmploymentQuestionPrevBtn.addEventListener("click", () => {
+            if (preEmploymentQuestionState.page > 1) {
+                loadPreEmploymentQuestionPage(preEmploymentQuestionState.page - 1);
+            }
+        });
+    }
+
+    if (preEmploymentQuestionNextBtn && !preEmploymentQuestionNextBtn.dataset.wired) {
+        preEmploymentQuestionNextBtn.dataset.wired = "1";
+        preEmploymentQuestionNextBtn.addEventListener("click", () => {
+            if (preEmploymentQuestionState.totalPages > preEmploymentQuestionState.page) {
+                loadPreEmploymentQuestionPage(preEmploymentQuestionState.page + 1);
+            }
+        });
+    }
+
+    if (preEmploymentQuestionTbody && !preEmploymentQuestionTbody.dataset.wired) {
+        preEmploymentQuestionTbody.dataset.wired = "1";
+        preEmploymentQuestionTbody.addEventListener("click", async (e) => {
+            const btn = e.target.closest('button[data-action="add-preemployment-question"]');
+            if (!btn) return;
+
+            const questionId = btn.getAttribute("data-question-id") || "";
+            if (!questionId || preEmploymentQuestionState.selectedQuestions.some(q => q.questionId === questionId)) {
+                return;
+            }
+
+            preEmploymentQuestionState.selectedQuestions.push({
+                questionId,
+                quizTitle: btn.getAttribute("data-quiz-title") || "",
+                questionText: btn.getAttribute("data-question-text") || ""
+            });
+            const quizId = btn.getAttribute("data-quiz-id") || "";
+            if (quizId && preEmploymentQuizSelect) {
+                const sourceOpt = Array.from(preEmploymentQuizSelect.options).find(opt => opt.value === quizId);
+                if (sourceOpt) sourceOpt.selected = true;
+            }
+            renderPreEmploymentSelectedQuestionList();
+            await loadPreEmploymentQuestionPage(preEmploymentQuestionState.page);
+        });
+    }
+
+    if (preEmploymentSelectedQuestionList && !preEmploymentSelectedQuestionList.dataset.wired) {
+        preEmploymentSelectedQuestionList.dataset.wired = "1";
+        preEmploymentSelectedQuestionList.addEventListener("click", async (e) => {
+            const btn = e.target.closest('button[data-action="remove-preemployment-question"]');
+            if (!btn) return;
+
+            const questionId = btn.getAttribute("data-question-id") || "";
+            preEmploymentQuestionState.selectedQuestions = preEmploymentQuestionState.selectedQuestions.filter(q => q.questionId !== questionId);
+            renderPreEmploymentSelectedQuestionList();
+            await loadPreEmploymentQuestionPage(preEmploymentQuestionState.page);
+        });
     }
 
     if (refreshHistoryBtn && !refreshHistoryBtn.dataset.wired) {
@@ -2637,6 +2987,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadQuestionEditorPage(questionEditorState.page);
         loadQuizCreatorPage(quizCreatorState.page);
         renderQuizCreatorSelectedList();
+        renderPreEmploymentSelectedQuestionList();
     }
 });
 
@@ -2754,7 +3105,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="muted" id="quizCreatorPageInfo"></span>
             </div>
         </div>
-        <div class="editorSidebar" style="border:1px solid var(--line); border-radius:16px; padding:14px; background:#fcf8f1;">
+        <div class="editorSidebar" style="border:1px solid var(--line); border-radius:16px; padding:14px;">
             <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
                 <strong>Selected Questions</strong>
                 <span class="pill" id="quizCreatorSelectedCount">0 selected</span>

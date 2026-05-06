@@ -36,6 +36,7 @@ Environment:
 | Quiz history update after submission | Pass |
 | Saved progress restore | Pass |
 | Pre-employment generation | Pass |
+| Pre-employment exact-question generation | Pass |
 | Pre-employment submission | Pass |
 
 ## Admin Flow Checks
@@ -51,6 +52,7 @@ Environment:
 | User activity CSV export | Pass |
 | SMTP settings load | Pass |
 | Pre-employment config load | Pass |
+| Pre-employment exact-question setup | Pass |
 | Pre-employment submissions load | Pass |
 | Usage report load | Pass |
 | Question Editor data load | Pass |

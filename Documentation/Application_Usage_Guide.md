@@ -39,6 +39,7 @@ Purpose:
 - Runs the selected quiz
 - Submits answers for scoring
 - Shows review mode for signed-in employees after submission
+- Removes active question and answer controls after submission so the completed quiz cannot keep being changed while results are shown
 
 ### Profile Page
 
@@ -360,7 +361,9 @@ Configuration includes:
 
 - Public page title
 - One or more source quizzes
-- Random question count pulled from the combined selected pool
+- Random question count pulled from each selected source quiz
+- Optional exact-question selection from specific disciplines/source exams
+- Optional access code / link token for candidate entry
 - Optional timer
 - Pass threshold
 
@@ -369,10 +372,13 @@ Steps:
 1. Open the admin page.
 2. Go to `Pre-Employment Quiz Setup`.
 3. Select one or more source quizzes.
-4. Set the question count.
-5. Optionally set timer and pass settings.
-6. Save the setup.
-7. Open the pre-employment page to verify the candidate experience.
+4. Set the random question count if the quiz should pull random questions from each source quiz.
+5. To use exact questions instead, choose a source exam in the specific question picker, search or page through its questions, and add the required questions to the selected list.
+6. Optionally set an access code, timer, and pass settings.
+7. Save the setup.
+8. Open the pre-employment page to verify the candidate experience.
+
+When exact questions are selected, the candidate quiz uses those saved question IDs instead of random source-exam pulls. Removing all selected exact questions returns the setup to random-per-source-exam mode.
 
 ### Pre-Employment Attempts
 
@@ -398,10 +404,11 @@ The pre-employment page is designed for candidates and should not require admin 
 Steps:
 
 1. Open `/preemployment.html`.
-2. Enter first name and last name.
-3. Start the test.
-4. Complete the questions.
-5. Submit the test.
+2. Enter the access code if the administrator configured one or use the provided coded link.
+3. Enter first name and last name.
+4. Start the test.
+5. Complete the questions.
+6. Submit the test.
 
 Candidate experience after submission:
 

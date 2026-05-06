@@ -40,6 +40,7 @@ Application:
 - [x] Quiz history updates after submission
 - [x] Quiz progress save and restore works
 - [x] Pre-employment quiz generation works
+- [x] Pre-employment exact-question generation works
 - [x] Pre-employment submission works
 
 ## Admin Flows
@@ -53,6 +54,7 @@ Application:
 - [x] User activity CSV export works
 - [x] SMTP settings load
 - [x] Pre-employment config load
+- [x] Pre-employment exact-question setup load/save
 - [x] Pre-employment submissions load
 - [x] Usage report loads
 - [x] Question Editor data loads
